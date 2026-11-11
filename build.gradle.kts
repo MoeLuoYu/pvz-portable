@@ -546,7 +546,7 @@ val mcVersionJar = tasks.register<Jar>("mcVersionJar") {
 
 val mcVersionJson = registerMcVersionJson(mcVersionId, mcAssetIndexId, project.version.toString())
 
-/** The launcher-shaped zip: `<version>/<version>.jar` + `<version>/<version>.json`, nothing else. */
+/** The launcher-shaped zip: `<version>/<version>.jar` + `<version>/<version>.json` + natives. */
 val mcVersionZip = tasks.register<Zip>("mcVersionZip") {
     group = "distribution"
     description = "Packages the Minecraft-client-style version zip (version folder: jar + json)."
@@ -559,6 +559,12 @@ val mcVersionZip = tasks.register<Zip>("mcVersionZip") {
     from(emptyAssetIndex) {
         into("launcher/assets/indexes")
         rename { PvzAssetIndex.fileName(project.version.toString()) }
+    }
+    // The libopenmpt binaries a launcher installation needs for the MO3 music. The offline
+    // distribution carries the same set in its own `lib/native/`; without them the version folder
+    // has no packaged copy and every launcher launch logs "Music disabled".
+    from(libopenmptNatives) {
+        into("lib/native")
     }
 }
 
@@ -591,6 +597,9 @@ val installMcMods = tasks.register<Copy>("installMcMods") {
  * installation lists and can launch the version with the mods loaded - and its pre-launch repair
  * finds nothing to download, instead of going after vanilla's 146 MB `legacy` index.
  */
+/** What a reinstall of the version folder keeps: the saves, the mods and the assets the player placed. */
+val REINSTALL_KEEP = listOf("savedata", "mods", "main.pak", "properties")
+
 val installMcVersion = tasks.register<Copy>("installMcVersion") {
     group = "distribution"
     description = "Installs the Minecraft-style version into -PmcGameDir (default: the macOS install)."
@@ -602,11 +611,50 @@ val installMcVersion = tasks.register<Copy>("installMcVersion") {
     val assetIndex = PvzAssetIndex.inGameDir(File(mcGameDir), project.version.toString())
     outputs.file(assetIndex)
     doFirst {
-        // the version folder is replaced as a whole, so a stale library or an old jar cannot survive
-        File(mcVersionsDir, mcVersionId).deleteRecursively()
+        // The version folder is replaced as a whole, so a stale library or an old jar cannot
+        // survive - except of what the game and the player put there: the saves, the mods and the
+        // game assets the player placed (`main.pak`, a loose `properties/`) are moved aside here
+        // and moved back after the copy (the zip carries none of them).
+        val folder = File(mcVersionsDir, mcVersionId)
+        val keep = File(temporaryDir, "reinstall-keep")
+        keep.deleteRecursively()
+        if (folder.isDirectory) {
+            for (name in REINSTALL_KEEP) {
+                val source = File(folder, name)
+                if (source.exists()) {
+                    val kept = File(keep, name)
+                    if (!source.renameTo(kept)) {
+                        if (source.isDirectory) {
+                            source.copyRecursively(kept, overwrite = true)
+                        } else {
+                            source.copyTo(kept, overwrite = true)
+                        }
+                    }
+                }
+            }
+        }
+        folder.deleteRecursively()
     }
     doLast {
         PvzAssetIndex.install(File(mcGameDir), project.version.toString())
+        // What was set aside above goes back under the fresh version folder; a rename inside one
+        // drive just moves it, the copy is the fallback for a cross-device target.
+        val folder = File(mcVersionsDir, mcVersionId)
+        val keep = File(temporaryDir, "reinstall-keep")
+        for (name in REINSTALL_KEEP) {
+            val kept = File(keep, name)
+            if (kept.exists()) {
+                val target = File(folder, name)
+                if (!target.exists() && !kept.renameTo(target)) {
+                    if (kept.isDirectory) {
+                        kept.copyRecursively(target, overwrite = true)
+                    } else {
+                        kept.copyTo(target, overwrite = true)
+                    }
+                }
+            }
+        }
+        keep.deleteRecursively()
         logger.lifecycle(
             "installMcVersion: {} installed into {} (mods from {}, empty asset index {})",
             mcVersionId, mcVersionsDir, mcModsDir, assetIndex,

@@ -140,7 +140,19 @@ final class OpenMptLibrary {
         // 1) the copy the distribution ships, in <gameDir>/lib/native/<os>-<arch>/ and - so that a
         //    library dropped in by hand is found too - <gameDir>/native/<os>-<arch>/. Loading it by
         //    absolute path is what makes the packaged copy win over a system one.
-        for (Path candidate : packagedCandidates(gameDirectory, platform)) {
+        //    PORT-NOTE (deviation): the directory of the running code is probed the same way after
+        //    the game directory. In a launcher installation (the Minecraft-style version package)
+        //    the version folder holds both the game jar and lib/native/, while -Dpvz.gameDir points
+        //    at the launcher's game directory - the .minecraft root when version isolation is off
+        //    and the version folder itself when it is on - so the code directory covers the
+        //    jar-adjacent layout however that switch is set. The distribution's own layout is
+        //    unaffected: its bin script already pins -Dpvz.gameDir at the distribution root.
+        List<Path> packaged = new ArrayList<>(packagedCandidates(gameDirectory, platform));
+        Path codeDirectory = cn.enaium.fabricpvz.portable.pvzp.ResourceLocator.executableDirectory();
+        if (codeDirectory != null && !codeDirectory.equals(gameDirectory)) {
+            packaged.addAll(packagedCandidates(codeDirectory, platform));
+        }
+        for (Path candidate : packaged) {
             Arena arena = Arena.ofShared();
             try {
                 preloadSatellites(candidate.getParent(), platform, arena);
