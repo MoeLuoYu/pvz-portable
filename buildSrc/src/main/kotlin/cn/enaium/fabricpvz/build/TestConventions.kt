@@ -34,6 +34,10 @@ fun Project.pvzTestConventions(modsDir: Provider<Directory>) {
     val videoDriver = System.getenv("SDL_VIDEODRIVER") ?: "dummy"
     val audioDriver = System.getenv("SDL_AUDIODRIVER") ?: "dummy"
     tasks.withType(Test::class.java).configureEach {
+        // The real-asset tests decode the whole retail `main.pak` (155 MB compressed; every image
+        // and sound expands in the heap) and boot full boards; the JVM default heap (~1/4 of the
+        // machine's RAM) died with out-of-memory partway through the suite on a 15.4 GB machine.
+        maxHeapSize = "6g"
         useJUnitPlatform()
         testLogging {
             events("passed", "skipped", "failed")
@@ -41,6 +45,14 @@ fun Project.pvzTestConventions(modsDir: Provider<Directory>) {
         }
         dependsOn(tasks.named("testModsJar"))
         systemProperty("pvz.test.modsDir", modsDir.get().asFile.absolutePath)
+        // The real-asset tests' own `-Dpvz.test.resources`, forwarded from a Gradle property so a
+        // run can pin the asset root (`-Ppvz.test.resources=<dir>`) independently of what the
+        // discovery chain finds — including suppressing it: an invalid directory (say, an empty
+        // one) yields no assets and the gated tests skip. Useful where the working directory
+        // holds a retail pak whose variant the asset-calibrated tests don't match.
+        providers.gradleProperty("pvz.test.resources").orNull?.let {
+            systemProperty("pvz.test.resources", it)
+        }
         dependsOn(tasks.named("distZip"))
         systemProperty("pvz.test.distribution", distribution)
         jvmArgs("--enable-native-access=ALL-UNNAMED")

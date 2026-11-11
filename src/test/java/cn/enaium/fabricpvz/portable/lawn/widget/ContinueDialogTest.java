@@ -39,6 +39,17 @@ class ContinueDialogTest {
         assertEquals(ContinueDialog.ContinueDialog_NewGame, aDialog.mNewGameButton.mId);
     }
 
+    /** The retail table banks the button text under RESTART_BUTTON; RESTART_LEVEL is a question
+     * sentence there (see the PORT-NOTE in ContinueDialog), so the button must resolve that key. */
+    @Test
+    void restartButtonResolvesTheRetailRestartButtonKey() {
+        LawnApp app = newApp();
+        app.mStringProperties.put("RESTART_BUTTON", "重新开始");
+        ContinueDialog aDialog = new ContinueDialog(app);
+
+        assertEquals("重新开始", aDialog.mNewGameButton.mLabel);
+    }
+
     @Test
     void dialogIsWideEnoughForBothButtons() {
         LawnApp app = newApp();

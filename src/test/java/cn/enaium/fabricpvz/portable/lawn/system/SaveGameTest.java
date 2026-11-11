@@ -454,7 +454,9 @@ class SaveGameTest {
         theBoard.mCursorObject.mImitaterType = SeedType.SEED_PEASHOOTER;
         theBoard.mAdvice.mDisplayTime = 250;
         theBoard.mAdvice.mDuration = 500;
-        theBoard.mAdvice.mLabel = "hello";
+        // A caption as the localized retail game shows it (Chinese): regression for the save
+        // buffer's string codec, which used to destroy every CJK char into '?' at write time.
+        theBoard.mAdvice.mLabel = "一大波僵尸正在接近！";
         theBoard.mSeedBank.mNumPackets = 3;
         theBoard.mSeedBank.mConveyorBeltCounter = 12;
         theBoard.mSeedBank.mSeedPackets[3].mPacketType = SeedType.SEED_SUNFLOWER;
@@ -575,7 +577,7 @@ class SaveGameTest {
             assertEquals(CursorType.CURSOR_TYPE_PLANT_FROM_BANK, aLoaded.mCursorObject.mCursorType);
             assertEquals(SeedType.SEED_PEASHOOTER, aLoaded.mCursorObject.mImitaterType);
             assertEquals(250, aLoaded.mAdvice.mDisplayTime);
-            assertEquals("hello", aLoaded.mAdvice.mLabel);
+            assertEquals("一大波僵尸正在接近！", aLoaded.mAdvice.mLabel);
             assertEquals(3, aLoaded.mSeedBank.mNumPackets);
             assertEquals(12, aLoaded.mSeedBank.mConveyorBeltCounter);
             assertEquals(SeedType.SEED_SUNFLOWER, aLoaded.mSeedBank.mSeedPackets[3].mPacketType);

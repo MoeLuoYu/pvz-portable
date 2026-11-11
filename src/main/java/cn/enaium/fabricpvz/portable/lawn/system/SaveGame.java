@@ -563,6 +563,13 @@ public final class SaveGame {
     // ---------------------------------------------------------------------------------------
 
     private static String syncFixedString(DataSync theSync, String theValue, int theLength) {
+        // PORT-NOTE: deviation from SaveGame.cpp:690-701 — upstream syncs the raw bytes of the
+        // std::string label, which in the English retail is ASCII and survives any byte-preserving
+        // codec unchanged. This port runs against localized retail resources, so a caption label is
+        // the localized text itself (Chinese): ISO_8859_1 destroyed it at WRITE time (every CJK
+        // char maps to 0x3F '?', and the reload drew a row of question marks). UTF-8 keeps the
+        // label byte-exact through the fixed buffer; truncation at theLength may cut a multibyte
+        // sequence, which the read then replaces rather than mis-decoding the rest.
         byte[] aBuf = new byte[theLength];
         if (isReading(theSync)) {
             theSync.syncBytes(aBuf);
@@ -570,9 +577,9 @@ public final class SaveGame {
             while (aLen < theLength && aBuf[aLen] != 0) {
                 aLen++;
             }
-            return new String(aBuf, 0, aLen, StandardCharsets.ISO_8859_1);
+            return new String(aBuf, 0, aLen, StandardCharsets.UTF_8);
         }
-        byte[] aBytes = theValue.getBytes(StandardCharsets.ISO_8859_1);
+        byte[] aBytes = theValue.getBytes(StandardCharsets.UTF_8);
         System.arraycopy(aBytes, 0, aBuf, 0, Math.min(aBytes.length, theLength));
         theSync.syncBytes(aBuf);
         return theValue;

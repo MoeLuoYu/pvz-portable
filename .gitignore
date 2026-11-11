@@ -48,3 +48,14 @@ run/
 ### The game's user data: written when the game runs straight from this directory ###
 userdata/
 cache64/
+
+### Local play setup: retail assets, the unpacked distribution, the local launcher script ###
+# The retail game assets (main.pak / properties/): PopCap/EA property, never enters the
+# repository (AGENTS.md §7 rule 6) — unanchored so an asset drop is safe at any depth
+main.pak
+properties/
+/PVZ_GOTY/
+# The unpacked distZip output extracted for playing (any version, at the project root)
+/pvz-portable-*/
+# A machine-specific convenience launcher (hard-coded JDK path, local asset layout)
+/启动游戏.bat

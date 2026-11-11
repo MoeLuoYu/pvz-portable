@@ -128,7 +128,11 @@ public class NewOptionsDialog extends Dialog implements SliderListener, Checkbox
         setButtonTextColor(new Color(255, 255, 100));
 
         mAlmanacButton = GameButton.makeButton(NewOptionsDialog_Almanac, this, "[VIEW_ALMANAC_BUTTON]");
-        mRestartButton = GameButton.makeButton(NewOptionsDialog_Restart, this, "[RESTART_LEVEL]");
+        // PORT-NOTE: deviation from NewOptionsDialog.cpp:50 — upstream labels this button
+        // "[RESTART_LEVEL]", but the retail string table keeps a confirmation question there
+        // (RESTART_LEVEL = "你确定想要重新开始这一关卡吗？"), not a label; the button text is
+        // banked under RESTART_BUTTON ("重新开始"), so this port resolves that key instead.
+        mRestartButton = GameButton.makeButton(NewOptionsDialog_Restart, this, "[RESTART_BUTTON]");
         mBackToMainButton = GameButton.makeButton(NewOptionsDialog_MainMenu, this, "[MAIN_MENU_BUTTON]");
 
         mBackToGameButton = GameButton.makeNewButton(

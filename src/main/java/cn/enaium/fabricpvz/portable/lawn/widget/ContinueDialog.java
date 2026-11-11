@@ -44,7 +44,11 @@ public class ContinueDialog extends LawnDialog {
             mDialogLines = mApp.getString("CONTINUE_GAME_OR_RESTART",
                     "Do you want to continue your current game or restart the level?");
             mContinueButton = GameButton.makeButton(ContinueDialog_Continue, this, "[CONTINUE_BUTTON]");
-            mNewGameButton = GameButton.makeButton(ContinueDialog_NewGame, this, "[RESTART_LEVEL]");
+            // PORT-NOTE: deviation from ContinueDialog.cpp — upstream labels this button
+            // "[RESTART_LEVEL]", but the retail string table keeps a confirmation question there
+            // (RESTART_LEVEL = "你确定想要重新开始这一关卡吗？"), not a label; the button text is
+            // banked under RESTART_BUTTON ("重新开始"), so this port resolves that key instead.
+            mNewGameButton = GameButton.makeButton(ContinueDialog_NewGame, this, "[RESTART_BUTTON]");
         } else {
             mDialogLines = mApp.getString("CONTINUE_GAME",
                     "Do you want to continue your current game or start a new game?");

@@ -286,6 +286,8 @@ gh release create "$VERSION" "build/distributions/pvz-portable-$VERSION.zip" \
 | 图鉴 | 一个固定的植物网格和一个固定的僵尸网格 | **第 0 页就是这两个网格**；植物页为玩家已解锁的已注册种子类型获得后续页面（id ≥ `SeedType.NUM_SEEDS_IN_CHOOSER`，每页按 id 顺序 `AlmanacDialog.ALMANAC_PLANT_PAGE_SIZE` = 48 个），僵尸页为零售范围之上的已定义僵尸类型获得后续页面（id ≥ `ZombieType.NUM_ZOMBIE_TYPES`，每页 25 个），底栏按钮行的空余区域有上一页/下一页箭头和`页码/总数`计数器 | 与选择器相同的规则，且游戏侧保持中立：名称和描述经由图鉴自己的 `AlmanacDialog.getPlantDescriptionText` / `getZombieNameText` / `getZombieDescriptionText` 接缝，由 `api-plant`/`api-zombie` 为已注册内容注入；只有一页时不绘制箭头和计数器，因此未装模组的图鉴与上游完全一致 |
 | 缓存植物帧 | `ReanimatorCache::MakeCachedPlantFrame` 为一份写死的种子类型列表绘制单独的 `anim_head_idle` 层 | 规则改为从植物的重动画读取（存在 `anim_head_idle` ⇒ 绘制该层），这正是那份列表的本意 | 该帧是光标预览、种子包美术和图鉴图片所显示的内容，而零售列表让一个用相同重动画注册的植物在这三处都没有头；零售集合不变（只有五个豌豆射手的重动画带有该层） |
 | 窗口与呈现 | 窗口以 `SDL_WINDOW_OPENGL \| SDL_WINDOW_RESIZABLE` 创建（无高 DPI 标志）；每个图元直接画进窗口并由 SDL 的逻辑呈现缩放，窗口服务器在 Retina 显示器上拉伸 800x600 的帧 | 窗口请求 `SDL_WINDOW_HIGH_PIXEL_DENSITY`；每一帧 1:1 画进 800x600 的离屏**画布**，渲染器每帧把该画布合成到 drawable 一次（上游的 `mScreenImage` 架构），整数倍放大用最近邻过滤，其余用线性过滤 | 用户要求 SDL 窗口的高像素模式；缩放每个图元会扭曲旋转/倾斜的四边形，且在分数倍缩放下会把部分源像素复制两次、另一些完全丢失（文字笔画粗细不均）——见 `../verification/VERIFICATION.md` §52。这是对上游的刻意偏离，不是移植上的捷径 |
+| 重新开始按钮 | 按钮标签用 `[RESTART_LEVEL]`（`ContinueDialog.cpp` / `NewOptionsDialog.cpp`） | 两处按钮（"继续游戏？"对话框与关卡内选项菜单）改用 `[RESTART_BUTTON]` | 零售字符串表里 `RESTART_LEVEL` 的值是一句确认问话（"你确定想要重新开始这一关卡吗？"）而非按钮文本，按钮文本在 `RESTART_BUTTON`（"重新开始"）下；照抄上游会让按钮显示整句问话 |
+| 存档中的字幕文本 | 关卡存档按原始字节同步字幕标签（`SaveGame.cpp:690-701`，英文零售版里即 ASCII） | 字幕标签的定长缓冲改用 UTF-8 编解码（`SaveGame.syncFixedString`） | 本移植版运行在本地化零售资源上，字幕标签是中文文本；ISO_8859_1 之类"逐字节原样"编解码会在**写入时**把每个汉字替换成 `?`（0x3F），于是"提示期间保存退出再进入"后字幕显示为一排问号。改用 UTF-8 后标签原样往返；仅影响 `MessageWidget` 的两个标签缓冲 |
 
 ## 开发任务
 

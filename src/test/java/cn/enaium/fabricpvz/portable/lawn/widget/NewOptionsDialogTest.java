@@ -119,6 +119,18 @@ class NewOptionsDialogTest {
         assertEquals(381, aDialog.mBackToGameButton.mY, "NewOptionsDialog.cpp:157");
     }
 
+    /** The retail table banks the in-level button text under RESTART_BUTTON; RESTART_LEVEL is a
+     * question sentence there (see the PORT-NOTE in NewOptionsDialog), so the button must resolve
+     * that key. */
+    @Test
+    void restartButtonResolvesTheRetailRestartButtonKey() {
+        LawnApp app = newApp();
+        app.mStringProperties.put("RESTART_BUTTON", "重新开始");
+        NewOptionsDialog aDialog = newDialog(app, false);
+
+        assertEquals("重新开始", aDialog.mRestartButton.mLabel);
+    }
+
     @Test
     void getPreferredHeightReturnsMenubackWidth() {
         LawnApp app = newApp();
