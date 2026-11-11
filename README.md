@@ -1,305 +1,187 @@
 # PvZ-Portable (Java)
 
-A **Java desktop port** of [PvZ-Portable](https://github.com/wszqkzqk/PvZ-Portable) — the community
-C++20 / SDL2 / OpenGL ES 2.0 reimplementation of *Plants vs. Zombies* GOTY — running on the **real
-[Fabric Loader](https://github.com/FabricMC/fabric-loader)** (Sponge Mixin included) through a game
-provider, so the game is extended exactly like a Minecraft Fabric mod: `fabric.mod.json`,
-`ModInitializer` entry points, a `mods/` directory, Sponge Mixin, and an event bus the game triggers at
-its own hook points.
+[PvZ-Portable](https://github.com/wszqkzqk/PvZ-Portable)——社区以 C++20 / SDL2 / OpenGL ES 2.0 重写的《植物大战僵尸》年度版——的 **Java 桌面移植版**，通过一个 game provider 运行在**真正的 [Fabric Loader](https://github.com/FabricMC/fabric-loader)**（含 Sponge Mixin）上，因此对游戏的扩展方式与 Minecraft Fabric 模组完全一致：`fabric.mod.json`、`ModInitializer` 入口点、`mods/` 目录、Sponge Mixin，以及在游戏自身挂钩点触发的事件总线。
 
-The version is **1.2.5**: the Gradle build, the jar, the Maven coordinate
-(`cn.enaium.fabricpvz:pvz-portable:1.2.5`) and the release archives
-(`pvz-portable-1.2.5-offline.zip`, the self-contained one, and `pvz-portable-1.2.5-online.zip`, the
-launcher-style one) all carry it. It does **not** track the upstream C++ project's release tags.
+当前版本为 **1.2.5**：Gradle 构建、jar、Maven 坐标（`cn.enaium.fabricpvz:pvz-portable:1.2.5`）以及发布压缩包（自包含的 `pvz-portable-1.2.5-offline.zip` 与启动器风格的 `pvz-portable-1.2.5-online.zip`）都使用这一版本号。它**不**跟随上游 C++ 项目的发布标签。
 
-## Where the game's assets are found
+## 游戏资源从哪里找
 
-The game needs the retail files (`main.pak` and a `properties/` directory). It looks for them in this
-order, first hit wins: `-resdir <path>` (a game argument), `-Dpvz.resDir=<path>` (a JVM argument),
-`PVZ_RES_DIR` (an environment variable), the working directory, the directory of the running jar, and a
-local Steam installation of Plants vs. Zombies (app id 3590, searched through every library folder,
-including the macOS `Plants vs. Zombies.app/Contents/Resources` layout).
+游戏需要零售版文件（`main.pak` 和一个 `properties/` 目录）。它按以下顺序查找，命中即止：`-resdir <path>`（游戏参数）、`-Dpvz.resDir=<path>`（JVM 参数）、`PVZ_RES_DIR`（环境变量）、工作目录、运行中的 jar 所在目录，以及本机的 Steam 版《植物大战僵尸》安装（App ID 3590，遍历每个库目录查找，包括 macOS 的 `Plants vs. Zombies.app/Contents/Resources` 布局）。
 
-The save directory is the game's own default, `<resource directory>/savedata` - where the original game
-keeps its saves, and the same place however the game is started (the distribution's script, a development
-run, or a launcher): the Minecraft-style version package deliberately passes no `-savedir`, because a
-launcher-relative save directory means a player's saves are not where their own runs put them. A `-savedir
-<path>` game argument still overrides it, as it always has.
+存档目录采用游戏自身的默认值 `<资源目录>/savedata`——原版游戏存放存档的位置；无论以哪种方式启动（发行包脚本、开发运行或启动器），存档都在同一处：Minecraft 风格的版本包刻意不传 `-savedir`，因为把存档目录挂在启动器下面，玩家的存档就不在自己运行游戏时会写到的位置。`-savedir <path>` 游戏参数仍然可以覆盖它，这一点一如既往。
 
-Two things are worth knowing when a launcher is in play. First, a Minecraft-style launcher remaps
-`user.home` to its game directory (HMCL passes `-Duser.home=<the .minecraft directory>`), so the Steam
-search takes the home directories from the environment's `HOME` *and* from `user.home` - the
-environment's first, because that is the one a launcher does not change. Second, if nothing is found
-the game logs every location it searched (and this JVM's `user.home`), so the reason is in the log
-instead of having to be guessed: `../verification/VERIFICATION.md`, section 70.
+涉及启动器时有两点值得了解。第一，Minecraft 风格的启动器会把 `user.home` 重映射到它的游戏目录（HMCL 会传 `-Duser.home=<.minecraft 目录>`），因此 Steam 查找会同时从环境变量 `HOME` *和* `user.home` 取用户主目录——环境变量的优先，因为启动器不改的就是它。第二，如果一无所获，游戏会把搜索过的每个位置（以及本 JVM 的 `user.home`）记入日志，所以原因写在日志里而无需猜测：见 `../verification/VERIFICATION.md` 第 70 节。
 
-The port has three layers, mirroring upstream: the engine (`sexy/`, the equivalent of
-SexyAppFramework), the game (`lawn/`, the equivalent of upstream's `src/Lawn/`) and the portable
-runtime (`pvzp/`, the equivalent of `PvzpLib`). It uses **LWJGL 3.4.3's `lwjgl-sdl` (SDL3)** for
-windowing, rendering and input, and OpenAL + stb_vorbis for audio (MO3 through libopenmpt).
+本移植版分为三层，与上游对应：引擎（`sexy/`，相当于 SexyAppFramework）、游戏（`lawn/`，相当于上游的 `src/Lawn/`）和可移植运行时（`pvzp/`，相当于 `PvzpLib`）。窗口、渲染与输入使用 **LWJGL 3.4.3 的 `lwjgl-sdl`（SDL3）**，音频使用 OpenAL + stb_vorbis（MO3 经由 libopenmpt）。
 
-The game code itself has **no Fabric dependency at all**: Fabric Loader is the launcher, and in the
-loader's eyes the game is a built-in mod with mod id `pvz-portable`. Everything Fabric-specific — the
-`GameProvider`, the launch libraries, the event/content API, the mod Gradle plugin — lives in the
-sibling projects listed under [Related projects](#related-projects).
+游戏代码本身**完全不依赖 Fabric**：Fabric Loader 只是启动器，在 loader 眼中本游戏是一个 mod id 为 `pvz-portable` 的内置模组。所有 Fabric 相关的内容——`GameProvider`、启动库、事件/内容 API、模组 Gradle 插件——都在 [相关项目](#相关项目) 中列出的姊妹项目里。
 
-**This repository ships no game assets.** *Plants vs. Zombies* is copyright PopCap/EA, and the game
-reads the retail resources from a directory you point it at (or from your local Steam install) — see
-[Game assets](#game-assets-user-provided).
+**本仓库不附带任何游戏资源。**《植物大战僵尸》版权归 PopCap/EA 所有，游戏从你指定的目录（或本机的 Steam 安装）读取零售版资源——见 [游戏资源（用户提供）](#游戏资源用户提供)。
 
-## Requirements
+## 环境要求
 
-| Component | Version | Notes |
+| 组件 | 版本 | 说明 |
 |---|---|---|
-| JDK | **25** | Gradle toolchain pinned to 25, sources compiled with `--release 25` |
-| Gradle | **9.8.1** | pinned by the wrapper — `./gradlew` is enough, no preinstalled Gradle |
-| Platform bindings | **LWJGL 3.4.3**: `lwjgl-sdl` (SDL3), `lwjgl-opengl`, `lwjgl-openal`, `lwjgl-stb`, `lwjgl-nfd` | only LWJGL 3.4.x has SDL3 bindings (3.3.x publishes no `lwjgl-sdl`) |
-| Audio (optional) | `libopenmpt` | needed for MO3 music only. The distribution ships the Windows build of it and the port looks there first; macOS/Linux use the installed/system copy. Without any copy music is disabled and sound effects work normally |
-| macOS | `-XstartOnFirstThread` | SDL needs the JVM's main thread to own the first thread; the `run`/test tasks add the switch themselves |
-| Kotlin | 2.4.21 | **mods only**: the mod toolchain compiles a Kotlin mod against this version, and a Kotlin mod needs the `fabric-language-kotlin` language module as the owner of `kotlin.*` at runtime. The game itself needs no Kotlin |
+| JDK | **25** | Gradle 工具链锁定为 25，源码以 `--release 25` 编译 |
+| Gradle | **9.8.1** | 由 wrapper 锁定——`./gradlew` 即可，无需预装 Gradle |
+| 平台绑定 | **LWJGL 3.4.3**：`lwjgl-sdl`（SDL3）、`lwjgl-opengl`、`lwjgl-openal`、`lwjgl-stb`、`lwjgl-nfd` | 只有 LWJGL 3.4.x 提供 SDL3 绑定（3.3.x 没有发布 `lwjgl-sdl`） |
+| 音频（可选） | `libopenmpt` | 仅 MO3 音乐需要。发行包内置其 Windows 版构建，移植版优先使用；macOS/Linux 使用系统安装的副本。没有任何副本时音乐被禁用，音效正常工作 |
+| macOS | `-XstartOnFirstThread` | SDL 需要 JVM 的主线程持有首线程；`run`/test 任务会自行添加该开关 |
+| Kotlin | 2.4.21 | **仅模组需要**：模组工具链按此版本编译 Kotlin 模组，而 Kotlin 模组在运行时需要 `fabric-language-kotlin` 语言模块作为 `kotlin.*` 的所有者。游戏本身不需要 Kotlin |
 
-`gradle.properties` sets `org.gradle.java.installations.auto-download=false`, so JDK 25 has to be
-installed on the machine already.
+`gradle.properties` 设置了 `org.gradle.java.installations.auto-download=false`，因此机器上必须已经装好 JDK 25。
 
-## Build, test, run
+## 构建、测试、运行
 
 ```bash
-./gradlew build                      # compile + the whole test suite (1458 tests, 145 test classes)
-./gradlew test                       # tests only
+./gradlew build                      # 编译 + 整个测试套件（1458 个测试，145 个测试类）
+./gradlew test                       # 仅测试
 ./gradlew test --tests 'cn.enaium.fabricpvz.portable.lawn.BoardTest'
-./gradlew run                        # start the game on the real Fabric Loader (game dir: run/)
-./gradlew syncDevResources run -PpvzResDir="/path/to/resources"   # copy main.pak/properties into run/, then start
+./gradlew run                        # 在真正的 Fabric Loader 上启动游戏（游戏目录：run/）
+./gradlew syncDevResources run -PpvzResDir="/path/to/resources"   # 把 main.pak/properties 复制进 run/，然后启动
 ```
 
-`./gradlew run` launches Fabric Loader's own launcher
-(`net.fabricmc.loader.impl.launch.knot.KnotClient`) with the working directory set to `run/`, passing
-`-Dpvz.gameDir=<project>/run`, `-Dfabric.skipMcProvider=true`, `-Dfabric.development=true` and
-`--enable-native-access=ALL-UNNAMED` (plus `-XstartOnFirstThread` on macOS). `run/mods/` is where the
-loader reads mods from, exactly as in an installation; `run/.fabric/` is the loader's cache and
-`run/userdata/` holds save data. `run` copies nothing into `run/mods/`: the mods a run loads are the
-jars you put there yourself, the API's `fabric-api-<version>.jar` among them, so a development run
-sees exactly the set a player's installation would. `run` does not depend on the asset sync: to work
-from an explicit resource directory, name `syncDevResources` in the same invocation
-(`./gradlew syncDevResources run -PpvzResDir=<dir>`), which copies only `main.pak` and
-`properties/**` into `run/`. Without it, the game finds its assets through the discovery chain below
-(your Steam installation, for instance).
+`./gradlew run` 启动的是 Fabric Loader 自带的启动器（`net.fabricmc.loader.impl.launch.knot.KnotClient`），工作目录设为 `run/`，并传入 `-Dpvz.gameDir=<项目>/run`、`-Dfabric.skipMcProvider=true`、`-Dfabric.development=true` 和 `--enable-native-access=ALL-UNNAMED`（macOS 上另有 `-XstartOnFirstThread`）。`run/mods/` 是 loader 读取模组的位置，与正式安装完全一致；`run/.fabric/` 是 loader 的缓存，`run/userdata/` 存放存档数据。`run` 不会向 `run/mods/` 复制任何内容：一次运行加载的模组就是你亲手放进那里的 jar，其中包括 API 的 `fabric-api-<version>.jar`，因此开发运行看到的模组集合与玩家的正式安装完全相同。`run` 不依赖资源同步：要用显式指定的资源目录，请在同一条命令里带上 `syncDevResources`（`./gradlew syncDevResources run -PpvzResDir=<dir>`），它只把 `main.pak` 和 `properties/**` 复制到 `run/`。不带它时，游戏会通过下面的发现链找到资源（例如你的 Steam 安装）。
 
-### What the build needs from the other repositories
+### 构建需要从其他仓库得到什么
 
-This project is standalone: every sibling artifact it consumes comes from `mavenLocal()` as a Maven
-coordinate, never from a sibling checkout's build directory. Its launcher (`lib/` of the distribution,
-the `runtimeOnly` dependencies of this build) is the real Fabric Loader with Mixin, ASM and the
-logging stack, plus the game provider, which is part of *this* project's own sources
-(`src/main/java/cn/enaium/fabricpvz/provider/`); the mod API is an ordinary published coordinate too —
-its five feature modules (`api-base`, `api-events`, `api-plant`, `api-resource`, `api-zombie`) are on
-the test *compile* class path only, and its aggregate jar (`fabric-api`) is what the loader end-to-end
-test finds in a real `mods/` directory (the version is `apiVersion` in `build.gradle.kts`, currently
-`1.2.0`). So, from a fresh clone with the siblings checked out side by side:
+本项目是独立的：它消费的每个姊妹构件都以 Maven 坐标的形式来自 `mavenLocal()`，绝不取自姊妹仓库检出的构建目录。它的启动器（发行包的 `lib/`，本构建的 `runtimeOnly` 依赖）是带 Mixin、ASM 和日志栈的真正 Fabric Loader，外加 game provider——后者是*本*项目自身源码的一部分（`src/main/java/cn/enaium/fabricpvz/provider/`）；模组 API 同样是一个普通发布的坐标——它的五个功能模块（`api-base`、`api-events`、`api-plant`、`api-resource`、`api-zombie`）只出现在测试的*编译*类路径上，而其聚合 jar（`fabric-api`）则是 loader 端到端测试在真实 `mods/` 目录中找到的东西（版本号是 `build.gradle.kts` 中的 `apiVersion`，目前为 `1.2.0`）。因此，从一次新克隆开始（姊妹仓库并排检出）：
 
 ```bash
-# this project, without tests, to put its POM in mavenLocal (the API compiles against this game)
+# 本项目，跳过测试，先把它的 POM 放进 mavenLocal（API 要针对本游戏编译）
 ./gradlew publishToMavenLocal -x test
 
-# from the fabric-api repository: publishes the aggregate `fabric-api` jar and the five `api-*` modules
-# (its event types are typed against this game's classes; its build resolves the mod Gradle plugin
-# `cn.enaium.fabricpvz.loom` from the Gradle Plugin Portal, so the plugin needs neither a checkout nor
-# a local publication)
+# 来自 fabric-api 仓库：发布聚合 `fabric-api` jar 和五个 `api-*` 模块
+# （它的事件类型针对本游戏的类定义；它的构建从 Gradle Plugin Portal 解析模组 Gradle 插件
+# `cn.enaium.fabricpvz.loom`，因此该插件既不需要检出也不需要本地发布）
 ./gradlew publishToMavenLocal
 
-# only the test suite needs this one: the loader end-to-end test loads its jar into a real mods/
-# directory
-# from the pvz-example-mod repository
+# 只有测试套件需要这一项：loader 端到端测试会把它的 jar 装进真实的 mods/ 目录
+# 来自 pvz-example-mod 仓库
 ./gradlew publishToMavenLocal
 
-# now this project builds and tests in full
+# 现在本项目可以完整地构建和测试了
 ./gradlew build
 ```
 
-After changing the API, publish it again before running this project's tests:
+改过 API 之后，先重新发布它，再运行本项目的测试：
 
 ```bash
 (cd ../fabric-api && ./gradlew publishToMavenLocal)
 cd ../PvZ-Portable && ./gradlew test
 ```
 
-Compiling the ported game itself needs only the provider; a missing or stale API publication shows up
-as an unresolved dependency, or as a test that does not match the API's working tree.
+编译移植的游戏本体只需要 game provider；API 发布缺失或过时会表现为无法解析的依赖，或者表现为某个测试与 API 的工作区对不上。
 
-## Game assets (user-provided)
+## 游戏资源（用户提供）
 
-The game looks for the asset root in this order (first hit wins); a directory qualifies when it
-contains `main.pak` (case-insensitive) or a `properties/` directory:
+游戏按以下顺序查找资源根目录（命中即止）；一个目录只要包含 `main.pak`（不区分大小写）或 `properties/` 目录即符合条件：
 
-1. `-resdir=<path>` command line argument
-2. `PVZ_RES_DIR` environment variable
-3. the current working directory
-4. the directory of the running jar/executable
-5. the local **Steam** installation of *Plants vs. Zombies* GOTY (app id 3590), searched through every
-   library folder listed in `steamapps/libraryfolders.vdf`
-   - macOS: `~/Library/Application Support/Steam/steamapps/common/Plants Vs Zombies/…/Contents/Resources/`
-   - Windows: `<steam>/steamapps/common/Plants vs. Zombies/`
-   - Linux: `~/.steam/steam`, `~/.steam/root`, `~/.local/share/Steam`, the Flatpak path, `~/.steam/debian-installation`
+1. `-resdir=<path>` 命令行参数
+2. `PVZ_RES_DIR` 环境变量
+3. 当前工作目录
+4. 运行中的 jar/可执行文件所在目录
+5. 本机 **Steam** 安装的《植物大战僵尸》年度版（App ID 3590），遍历 `steamapps/libraryfolders.vdf` 列出的每个库目录查找
+   - macOS：`~/Library/Application Support/Steam/steamapps/common/Plants Vs Zombies/…/Contents/Resources/`
+   - Windows：`<steam>/steamapps/common/Plants vs. Zombies/`
+   - Linux：`~/.steam/steam`、`~/.steam/root`、`~/.local/share/Steam`、Flatpak 路径、`~/.steam/debian-installation`
 
-Writable data (save games, the registry emulation, the resource cache) goes to `-savedir=<path>`,
-defaulting to the platform-standard application data directory. Running the game straight from the
-project directory therefore creates `userdata/` and `cache64/` next to the sources.
+可写数据（存档、注册表模拟、资源缓存）写入 `-savedir=<path>`，默认为各平台标准的应用数据目录。因此直接从项目目录运行游戏，会在源码旁边创建 `userdata/` 和 `cache64/`。
 
-## The distribution (`distZip`)
+## 发行包（`distZip`）
 
 ```bash
 ./gradlew distZip       # → build/distributions/pvz-portable-1.2.5-offline.zip
-./gradlew installDist   # → build/install/pvz-portable/ (the same thing, expanded)
+./gradlew installDist   # → build/install/pvz-portable/（同样的内容，解压形式）
 ```
 
-The zip is Gradle's own `application`-plugin archive — no hand-rolled packaging — and is **one zip for
-every platform**: it carries the LWJGL native libraries of Windows, Linux and macOS on x64 and arm64
-(six classifiers × six LWJGL modules = 36 natives jars, about 25 MB of the zip), and the launcher picks
-the directory for the machine it runs on.
+这个 zip 是 Gradle `application` 插件自己的归档——没有任何手工打包——而且是**一份通吃所有平台的 zip**：它携带 Windows、Linux 和 macOS 在 x64 与 arm64 上的 LWJGL 本地库（六个 classifier × 六个 LWJGL 模块 = 36 个 natives jar，约占 zip 的 25 MB），启动脚本会为运行它的机器挑选对应目录。
 
 ```
 pvz-portable-1.2.5/
-├── bin/pvz-portable            start script: Fabric Loader's launcher (KnotClient) — the same entry
-├── bin/pvz-portable.bat        point `./gradlew run` uses; the .bat is the Windows counterpart
-├── lib/                        pvz-portable-1.2.5.jar and everything needed to start:
-│                               the launcher stack (Fabric Loader, Mixin, ASM, the Log4j binding and
-│                               log4j2.xml), slf4j-api, the LWJGL modules and all 36 natives jars
-└── launcher/assets/indexes/    pvz-portable-1.2.5.json - the empty asset index a launcher's
-                                pre-launch check wants (14 bytes). Copy this directory tree over the
-                                game directory (`cp -r <package>/launcher/assets <game dir>/`) and the
-                                check is satisfied locally: no download, no network
+├── bin/pvz-portable            启动脚本：Fabric Loader 的启动器（KnotClient）——与
+├── bin/pvz-portable.bat        `./gradlew run` 使用的入口点相同；.bat 是它的 Windows 对应版本
+├── lib/                        pvz-portable-1.2.5.jar 以及启动所需的一切：
+│                               启动器栈（Fabric Loader、Mixin、ASM、Log4j 绑定和
+│                               log4j2.xml）、slf4j-api、LWJGL 各模块和全部 36 个 natives jar
+└── launcher/assets/indexes/    pvz-portable-1.2.5.json——启动器预启动检查所需的空资源索引
+                                （14 字节）。把这棵目录树复制到游戏目录
+                                （`cp -r <package>/launcher/assets <game dir>/`）即可在本地满足
+                                该检查：无需下载、无需联网
 ```
 
-The zip contains no `mods/` directory — that is the one thing you add.
+zip 里没有 `mods/` 目录——这是唯一需要你自己添加的东西。
 
-**Native libraries (`lib/native/`).** `lib/` also carries the native libraries the game loads itself,
-one directory per platform: `lib/native/<os>-<arch>/` holds `libopenmpt.dll` for `windows-x64` and
-`windows-arm64` — the Windows builds are the only compiled libopenmpt binaries upstream publishes
-(its download page points every other system at its distribution packages) — plus the codec DLLs the
-library is linked against (`openmpt-ogg`, `openmpt-mpg123`, `openmpt-vorbis`, `openmpt-zlib`), the
-licence as `lib/native/libopenmpt-LICENSE.txt`, and `lib/native/libopenmpt-natives.txt`, the record of
-the release archive the files come from with their sha256 sums. The build downloads that archive once,
-verifies its sha256, and stages it (`./gradlew libopenmptNatives`): a build without network and
-without the cache in the Gradle user home (`caches/pvz/libopenmpt`) fails and says which URL to fetch
-instead of producing a zip without them; once cached, `--offline` builds work.
+**本地库（`lib/native/`）。** `lib/` 还携带游戏自行加载的本地库，每个平台一个目录：`lib/native/<os>-<arch>/` 为 `windows-x64` 和 `windows-arm64` 放置 `libopenmpt.dll`——上游发布的唯一已编译 libopenmpt 二进制就是 Windows 版（其下载页把其他所有系统都指向发行版软件包）——以及该库链接所需的编解码 DLL（`openmpt-ogg`、`openmpt-mpg123`、`openmpt-vorbis`、`openmpt-zlib`）、许可证文件 `lib/native/libopenmpt-LICENSE.txt`，还有 `lib/native/libopenmpt-natives.txt`——记录这些文件来自哪个发布压缩包及其 sha256 校验和。构建会下载该压缩包一次、校验 sha256 并暂存（`./gradlew libopenmptNatives`）：既没有网络、Gradle 用户主目录里也没有缓存（`caches/pvz/libopenmpt`）的构建会失败并提示应获取哪个 URL，而不是产出一个缺了它们的 zip；一旦缓存，`--offline` 构建即可工作。
 
-The port looks there **first** and falls back to the system library, so on macOS and Linux it keeps
-using the copy your package manager installed (`brew install libopenmpt`, `apt install libopenmpt0`,
-…); a `libopenmpt.dylib`/`libopenmpt.so` you build yourself also wins when you drop it into
-`<game directory>/lib/native/<os>-<arch>/` (or `<game directory>/native/<os>-<arch>/`). Without any
-copy the game plays everything except the two MO3 music files — the sound effects and every `.ogg`
-track are decoded in Java — and logs one `Music disabled: libopenmpt is not available` line. When a
-copy does load, one INFO line reports the path and the version:
-`Music: libopenmpt 0.8.9 loaded from …/lib/native/windows-arm64/libopenmpt.dll`.
+移植版**优先**查找这里，找不到时回退到系统库，因此在 macOS 和 Linux 上会继续使用包管理器安装的副本（`brew install libopenmpt`、`apt install libopenmpt0`……）；你自己编译的 `libopenmpt.dylib`/`libopenmpt.so` 放进 `<游戏目录>/lib/native/<os>-<arch>/`（或 `<游戏目录>/native/<os>-<arch>/`）后同样优先。没有任何副本时，游戏照常可玩，只有两首 MO3 音乐除外——音效和所有 `.ogg` 曲目都用 Java 解码——并记录一行 `Music disabled: libopenmpt is not available`。某个副本成功加载时，会有一行 INFO 报告路径和版本：`Music: libopenmpt 0.8.9 loaded from …/lib/native/windows-arm64/libopenmpt.dll`。
 
-**Installing mods.** The zip ships no `mods/` directory and no mod jar, because a mod is something the
-player installs. Fabric Loader reads `mods/` from the game directory it is launched on, and for an
-unpacked distribution that game directory is the unpacked root — the directory holding `bin/` and
-`lib/`, so **`mods/` sits next to `bin/`**:
+**安装模组。** zip 不附带 `mods/` 目录，也不附带模组 jar，因为模组是玩家自己安装的东西。Fabric Loader 从它被启动所在的游戏目录读取 `mods/`，对解压后的发行包而言，游戏目录就是解压根目录——即容纳 `bin/` 和 `lib/` 的那个目录，所以 **`mods/` 与 `bin/` 并排**：
 
 ```bash
 unzip -q build/distributions/pvz-portable-1.2.5.zip -d /tmp/pvz
 mkdir -p /tmp/pvz/pvz-portable-1.2.5/mods
 cp /path/to/fabric-api-1.2.0.jar /path/to/some-mod-1.0.0.jar /tmp/pvz/pvz-portable-1.2.5/mods/
-/tmp/pvz/pvz-portable-1.2.5/bin/pvz-portable     # start it from any working directory
+/tmp/pvz/pvz-portable-1.2.5/bin/pvz-portable     # 从任何工作目录启动都行
 ```
 
-The start scripts set `-Dpvz.gameDir` to the unpacked root derived from the script's own location
-(`$APP_HOME` / `%APP_HOME%`), so `mods/` is found however the script is started — a double-click, a
-shortcut, another working directory. It is a **default**: the scripts expand `DEFAULT_JVM_OPTS` before
-the user's `JAVA_OPTS`/`PVZ_PORTABLE_OPTS`, and in the JVM a later `-D` of the same name wins, so you
-can relocate the game directory:
+启动脚本把 `-Dpvz.gameDir` 设为根据脚本自身位置推导出的解压根目录（`$APP_HOME` / `%APP_HOME%`），因此无论怎样启动脚本——双击、快捷方式、换个工作目录——都能找到 `mods/`。它只是一个**默认值**：脚本先展开 `DEFAULT_JVM_OPTS`，然后才是用户的 `JAVA_OPTS`/`PVZ_PORTABLE_OPTS`，而 JVM 中后出现的同名 `-D` 会胜出，所以你可以把游戏目录挪走：
 
 ```bash
 PVZ_PORTABLE_OPTS="-Dpvz.gameDir=/some/other/game/dir" /tmp/pvz/pvz-portable-1.2.5/bin/pvz-portable
 ```
 
-The provider also accepts a `-gamedir <path>` game argument, but resolves `-Dpvz.gameDir` first, so in
-an unpacked distribution the script's property shadows it. The scripts already pass
-`--enable-native-access=ALL-UNNAMED` and `-Dfabric.skipMcProvider=true` (and `-XstartOnFirstThread` on
-macOS); add JVM options through `PVZ_PORTABLE_OPTS` or `JAVA_OPTS`.
+game provider 也接受 `-gamedir <path>` 游戏参数，但会先解析 `-Dpvz.gameDir`，因此在解压后的发行包中，脚本的系统属性会遮蔽它。脚本已经传入 `--enable-native-access=ALL-UNNAMED` 和 `-Dfabric.skipMcProvider=true`（macOS 上还有 `-XstartOnFirstThread`）；额外的 JVM 选项通过 `PVZ_PORTABLE_OPTS` 或 `JAVA_OPTS` 添加。
 
-Assets are still yours to point at, either as a game argument or through the environment:
+资源仍需你自己指定，可以用游戏参数，也可以用环境变量：
 
 ```bash
 /tmp/pvz/pvz-portable-1.2.5/bin/pvz-portable -resdir "/path/to/Plants vs. Zombies/Resources"
 PVZ_RES_DIR="/path/to/resources" /tmp/pvz/pvz-portable-1.2.5/bin/pvz-portable
 ```
 
-The zip is also what **mod builds compile against**: a mod project's `pvz(...)` configuration names
-this game, takes the release asset `pvz-portable-<version>.zip` of that version and puts its `lib/`
-on the mod's compile/test/run class path. Changing what goes into `lib/` therefore changes what mods
-link against — see the `loom` repository for the toolchain itself.
+这个 zip 也是**模组构建编译所针对的东西**：模组项目的 `pvz(...)` 配置指名本游戏，取该版本的发布资产 `pvz-portable-<version>.zip`，并把它的 `lib/` 放上模组的编译/测试/运行类路径。因此改变进入 `lib/` 的内容就会改变模组链接的对象——工具链本身见 `loom` 仓库。
 
-### On Windows
+### 在 Windows 上
 
-The Steam installation is found by itself (`steamapps/libraryfolders.vdf` → every library folder), so
-the retail `Plants Vs Zombies` directory — including the Steam build's `.au` sounds — needs no wrapper
-directory and no converted assets. Verified on Windows 11 ARM64 with a Liberica JDK 25 and the real
-Steam assets (../verification/VERIFICATION.md §59).
+Steam 安装会被自动找到（`steamapps/libraryfolders.vdf` → 每个库目录），因此零售版 `Plants Vs Zombies` 目录——包括 Steam 版的 `.au` 音效——不需要外层包装目录，也不需要转换过的资源。已在 Windows 11 ARM64 + Liberica JDK 25 + 真实 Steam 资源上验证（../verification/VERIFICATION.md §59）。
 
-**Rendering backend.** The SDL default renderer can take the JVM down inside `SDL_CreateRenderer`
-(`EXCEPTION_ACCESS_VIOLATION`) on some Windows setups — the launcher then has no `RENDERER:` line and
-no window content. Ask for the software backend instead:
+**渲染后端。** 在某些 Windows 环境下，SDL 默认渲染器可能在 `SDL_CreateRenderer` 内部把 JVM 拖垮（`EXCEPTION_ACCESS_VIOLATION`）——此时启动日志里没有 `RENDERER:` 一行，窗口也没有内容。请改用软件后端：
 
 ```bat
 set PVZ_PORTABLE_OPTS=-Dpvz.renderer=software
 bin\pvz-portable.bat
 ```
 
-A missing `RENDERER:` line means the requested GPU backend failed and the port fell back to its
-offscreen software renderer, so if the picture looks wrong, check the log line first.
+缺少 `RENDERER:` 一行意味着请求的 GPU 后端失败，移植版回退到了离屏软件渲染器，所以如果画面看起来不对，先看日志行。
 
-**Music.** The MO3 tracks need libopenmpt, and the Windows build of it travels inside the distribution
-(`lib/native/windows-x64` / `windows-arm64`, see "The distribution" above), so nothing has to be
-installed. The system copy is still the fallback on every platform: `libopenmpt.dll` on `PATH` or in
-`C:\Program Files\libopenmpt\`, Homebrew's on macOS, the distribution package on Linux. Without any
-copy the log says `Music disabled: libopenmpt is not available` and `music failed to load` twice. Both
-are non-fatal: the game runs, only the music is silent.
+**音乐。** MO3 曲目需要 libopenmpt，而它的 Windows 版构建随发行包一同分发（`lib/native/windows-x64` / `windows-arm64`，见上文"发行包"一节），因此无需额外安装。系统副本仍是所有平台上的回退：Windows 上是 `PATH` 或 `C:\Program Files\libopenmpt\` 里的 `libopenmpt.dll`，macOS 上是 Homebrew 的，Linux 上是发行版软件包。没有任何副本时，日志会显示 `Music disabled: libopenmpt is not available` 和两次 `music failed to load`。两者都不致命：游戏照常运行，只是没有音乐。
 
-**Sounds.** WAV, Ogg Vorbis, MO3 and AU (µ-law, the Sun/NeXT format the Steam assets use) are decoded
-from their content, not their file name. A sound whose container nothing can decode is logged
-(`Skipping sound '…': unrecognized audio container in …`) and skipped, while a sound that is missing
-from the pak/properties/data files still fails the loading thread — so a broken manifest is not
-hidden by the skip.
+**音效。** WAV、Ogg Vorbis、MO3 和 AU（µ-law，Steam 资源使用的 Sun/NeXT 格式）都按内容而非文件名解码。容器无法被任何解码器识别的音效会被记录（`Skipping sound '…': unrecognized audio container in …`）并跳过；而 pak/properties/data 文件中缺失的音效仍会让加载线程失败——因此损坏的清单不会被跳过逻辑掩盖。
 
-### On Linux
+### 在 Linux 上
 
-Verified on Fedora 44 Server (aarch64, OpenJDK 25) with Wayland and with X11: the window dump, both mod
-harnesses, a played level, the Steam asset discovery and the MO3 music all match the macOS numbers
-(../verification/VERIFICATION.md §62).
+已在 Fedora 44 Server（aarch64，OpenJDK 25）上验证，Wayland 与 X11 皆可：窗口转储、两个模组测试床、一次实际游玩关卡、Steam 资源发现和 MO3 音乐都与 macOS 上的数字一致（../verification/VERIFICATION.md §62）。
 
-**Display.** SDL3 needs a display server, and an SSH login has neither `DISPLAY` nor
-`WAYLAND_DISPLAY` set. Both routes work — Wayland through the session's runtime directory:
+**显示。** SDL3 需要显示服务器，而 SSH 登录既没有 `DISPLAY` 也没有 `WAYLAND_DISPLAY`。两条路都可行——Wayland 走会话的运行时目录：
 
 ```bash
 XDG_RUNTIME_DIR=/run/user/$(id -u) WAYLAND_DISPLAY=wayland-0 SDL_VIDEODRIVER=wayland bin/pvz-portable
 ```
 
-and X11/Xwayland, which needs the session's own authorization file: a bare `DISPLAY=:0` fails with
-`Authorization required, but no authorization protocol specified` (and then `SDL_Init(SDL_INIT_VIDEO)
-failed: x11 not available`), because an SSH environment has no `~/.Xauthority`:
+以及 X11/Xwayland，它需要会话自己的授权文件：裸的 `DISPLAY=:0` 会失败，报 `Authorization required, but no authorization protocol specified`（随后是 `SDL_Init(SDL_INIT_VIDEO) failed: x11 not available`），因为 SSH 环境没有 `~/.Xauthority`：
 
 ```bash
 DISPLAY=:0 XAUTHORITY=/run/user/$(id -u)/.mutter-Xwaylandauth.XXXXXX SDL_VIDEODRIVER=x11 bin/pvz-portable
 ```
 
-`Failed to load plugin 'libdecor-gtk.so': failed to init` is SDL's Wayland client-decoration plugin
-(libdecor + GTK3) missing on a Server install; SDL falls back to server-side or undecorated windows and
-the window works normally, so the line is environment, not a defect.
+`Failed to load plugin 'libdecor-gtk.so': failed to init` 是 Server 安装缺少 SDL 的 Wayland 客户端装饰插件（libdecor + GTK3）；SDL 会回退到服务端装饰或无装饰窗口，窗口工作正常，因此这一行是环境所致，不是缺陷。
 
-**Rendering backend.** The default (`opengl`) works even on a machine without a GPU — the VM runs it
-through Mesa's llvmpipe — and `-Dpvz.renderer=software` works as well. Both draw the same picture; the
-software backend used to lose a race with the window manager's first resize, which is fixed and
-explained in ../verification/VERIFICATION.md §62.
+**渲染后端。** 默认（`opengl`）在没有 GPU 的机器上也能工作——虚拟机经 Mesa 的 llvmpipe 运行它——`-Dpvz.renderer=software` 同样可用。两者画出相同的画面；软件后端曾经在与窗口管理器首次调整大小的竞争中落败，该问题已修复并在 ../verification/VERIFICATION.md §62 中说明。
 
-**Native library directory.** The directory name is the one `OpenMptLibrary.nativePlatform()` produces:
-`linux-x64` and `linux-arm64`. The architecture is normalized, so `aarch64` maps to `arm64` — a
-`lib/native/linux-aarch64/` directory is **not** found.
+**本地库目录。** 目录名是 `OpenMptLibrary.nativePlatform()` 产出的名字：`linux-x64` 和 `linux-arm64`。架构会被规范化，`aarch64` 映射为 `arm64`——`lib/native/linux-aarch64/` 目录**不会**被找到。
 
-**Music (libopenmpt).** A distribution package is found by itself now (`dnf install libopenmpt` on
-Fedora/RHEL installs `/usr/lib64/libopenmpt.so.0`, `apt install libopenmpt0` the multiarch
-`/usr/lib/<triplet>/libopenmpt.so.0`), and a copy in the game directory still wins. Without root, the
-same library can be unpacked into the distribution's own native directory:
+**音乐（libopenmpt）。** 发行版软件包现在会被自动发现（Fedora/RHEL 上 `dnf install libopenmpt` 安装 `/usr/lib64/libopenmpt.so.0`，`apt install libopenmpt0` 安装 multiarch 的 `/usr/lib/<triplet>/libopenmpt.so.0`），游戏目录里的副本仍然优先。没有 root 时，可以把同一个库解包进发行包自带的本地库目录：
 
 ```bash
 mkdir -p ~/libopenmpt && cd ~/libopenmpt
@@ -309,44 +191,35 @@ mkdir -p ~/pvz/lib/native/linux-arm64
 cp -L usr/lib64/libopenmpt.so.0.5.5 ~/pvz/lib/native/linux-arm64/libopenmpt.so
 ```
 
-Its dependencies (`libz`, `libmpg123`, `libogg`, `libvorbis`, `libstdc++`) come from the base system.
-Verified: `Music: libopenmpt 0.8.6 loaded from …/lib/native/linux-arm64/libopenmpt.so`, and both MO3
-tracks decode to the same PCM as macOS and Windows (MAINMUSIC: 8,373,498 frames, 0.9994 non-zero
-samples, peak 14462).
+它的依赖（`libz`、`libmpg123`、`libogg`、`libvorbis`、`libstdc++`）来自基础系统。已验证：`Music: libopenmpt 0.8.6 loaded from …/lib/native/linux-arm64/libopenmpt.so`，且两首 MO3 曲目解码出的 PCM 与 macOS 和 Windows 相同（MAINMUSIC：8,373,498 帧，非零采样 0.9994，峰值 14462）。
 
-### Releases
+### 发布
 
-A release is cut by hand from a tagged commit: this repository has **no CI automation** — no
-workflow, nothing that runs on a push — so a release is a deliberate, local act.
+发布是从打了标签的提交手工完成的：本仓库**没有任何 CI 自动化**——没有 workflow，push 时也不运行任何东西——因此发布是一次刻意为之的本地操作。
 
 ```bash
-# from the commit to release (on main), tagged with the version the build states: the tag names the
-# release and the asset is named after the same version
+# 从要发布的提交开始（main 上），以构建声明的版本打标签：标签命名发布，
+# 发布资产也以同一版本命名
 VERSION="$(./gradlew -q printVersion)"                       # 1.2.5
 git tag -a "$VERSION" -m "pvz-portable $VERSION" && git push origin "$VERSION"
-test "${VERSION#v}" = "$(git describe --tags --exact-match)" # tag == version, or stop here
+test "${VERSION#v}" = "$(git describe --tags --exact-match)" # 标签 == 版本，否则就此停下
 
-# the distribution is the artifact (`./gradlew build` first if the suite has to pass too)
+# 发行包就是产物（若还需测试套件通过，先跑 `./gradlew build`）
 ./gradlew distZip                                            # → build/distributions/pvz-portable-$VERSION.zip
 
-# attach it to the tag's release; `--verify-tag` refuses a tag that is not pushed yet, and re-cutting
-# an existing release is `gh release upload "$VERSION" "build/distributions/pvz-portable-$VERSION.zip" --clobber`
+# 把它附加到该标签的 release 上；`--verify-tag` 会拒绝尚未推送的标签；重新上传已有 release 用
+# `gh release upload "$VERSION" "build/distributions/pvz-portable-$VERSION.zip" --clobber`
 gh release create "$VERSION" "build/distributions/pvz-portable-$VERSION.zip" \
   --title "pvz-portable $VERSION" --verify-tag
 ```
 
-The `test` line is the whole of the "the tag and the project version agree" rule: the version lives in
-`build.gradle.kts` alone (`./gradlew -q printVersion` prints it) and the asset name is derived from
-it, so a release cannot carry a mislabelled zip. The zip itself does not depend on the machine it is
-built on, because `lib/` carries the natives of every supported platform. Leave packaging to Gradle's
-`distZip`, never hand-roll an archive, and do not add a workflow back (§6 of `AGENTS.md` says why).
+`test` 那一行就是"标签与项目版本一致"规则的全部：版本号只存在于 `build.gradle.kts` 中（`./gradlew -q printVersion` 会打印它），资产名由它派生，因此发布不可能带上贴错标签的 zip。zip 本身不依赖构建它的机器，因为 `lib/` 携带所有受支持平台的本地库。打包交给 Gradle 的 `distZip`，绝不手工卷归档，也不要把 workflow 加回来（`AGENTS.md` §6 说明了原因）。
 
-The 1.0.0 release was cut that way, from the same `./gradlew distZip` output.
+1.0.0 发布正是这样完成的，来自同一份 `./gradlew distZip` 输出。
 
-## Mods
+## 模组
 
-A mod for this game is an ordinary Fabric mod: a jar with a `fabric.mod.json` and (optionally) a Mixin
-configuration, dropped into the game directory's `mods/`.
+本游戏的模组就是一个普通的 Fabric 模组：一个带 `fabric.mod.json` 和（可选）Mixin 配置的 jar，放进游戏目录的 `mods/`。
 
 ```json
 {
@@ -360,186 +233,103 @@ configuration, dropped into the game directory's `mods/`.
 }
 ```
 
-- **Mod ids.** The game is `pvz-portable`; the API is `fabric-api` (its feature modules `api-base`,
-  `api-events`, `api-plant`, `api-resource`, `api-zombie` are nested inside that one jar). A mod that wants the API
-  declares `"fabric-api": ">=1.0.0"`, and `"pvz-portable": "*"` for the game — the game's version is
-  not something a mod has to follow.
-- **Entry points** are Fabric's own interfaces (`net.fabricmc.api.ModInitializer`,
-  `ClientModInitializer`, `net.fabricmc.loader.api.entrypoint.PreLaunchEntrypoint`). The game provider
-  invokes `main`/`client` before the game's main class; `preLaunch` is the loader's own. Fabric Loader
-  defines no order between mods, so an initializer must not assume another mod's initializer has run.
-- **Mixin** is the real Sponge Mixin that ships with Fabric Loader (`@Mixin/@Inject/@Redirect/
-  @Overwrite/@Shadow/@Accessor/@Invoker`). The port runs without mappings, so mixin references are used
-  verbatim and no refmap is needed.
-- **Content** (custom plants and zombies) comes from `api-plant`/`api-zombie`, and a mod's own art
-  (its seed-packet icon, a recoloured retail plant) from `api-resource`: registering a definition
-  writes a row into this game's capacity-sized definition tables (`SeedType.MAX_SEED_TYPES`,
-  `ZombieType.MAX_ZOMBIE_TYPES`; an empty row means "not registered") and the API's Mixins dispatch the
-  definition's behaviour into the game's own methods — the game has no registry and no mod concept of
-  its own. Both the seed chooser and the Almanac show registered content on a page after the vanilla
-  grid (page 0): a registered seed the player has unlocked joins the chooser's later pages, and the
-  Almanac's plant page gets the same kind of later page (its zombie page gets one for every defined
-  zombie above the retail range), where the entry's card shows the name and the description the
-  registration carries.
-- **Events** come from the API: `cn.enaium.fabricpvz.api.lawn.LawnEvents` (level start/end, waves,
-  zombie spawn/death/hurt, plant placed/removed/hurt, sun collected, planting validation, every tick,
-  before/after draw), `cn.enaium.fabricpvz.api.PvzFabricApi` and
-  `cn.enaium.fabricpvz.api.mod.ModQuery` (Fabric Loader's mod queries). The API also ships its own
-  Fabric-shaped event bus (`cn.enaium.fabricpvz.api.event`) rather than depending on Fabric API's base
-  module.
-- **Where mods are loaded from.** Always `mods/` under the game directory. A mod that is only on the
-  class path is discovered when the loader runs in development mode
-  (`-Dfabric.development=true`, which `./gradlew run` passes) — that is how a mod's own `runClient`
-  works. The API in particular is a `mods/` jar in every case, never a class path entry: during
-  development you copy `fabric-api-<version>.jar` into `run/mods/` yourself — the build installs
-  nothing there.
+- **Mod id。** 游戏是 `pvz-portable`；API 是 `fabric-api`（其功能模块 `api-base`、`api-events`、`api-plant`、`api-resource`、`api-zombie` 嵌在那个 jar 内）。想要 API 的模组声明 `"fabric-api": ">=1.0.0"`，针对游戏声明 `"pvz-portable": "*"`——游戏的版本不是模组必须跟随的东西。
+- **入口点**是 Fabric 自己的接口（`net.fabricmc.api.ModInitializer`、`ClientModInitializer`、`net.fabricmc.loader.api.entrypoint.PreLaunchEntrypoint`）。game provider 在游戏主类之前调用 `main`/`client`；`preLaunch` 是 loader 自己的。Fabric Loader 不定义模组之间的顺序，因此初始化器不得假设另一个模组的初始化器已经运行。
+- **Mixin** 是 Fabric Loader 自带的真正 Sponge Mixin（`@Mixin/@Inject/@Redirect/@Overwrite/@Shadow/@Accessor/@Invoker`）。本移植版不带映射运行，因此 mixin 引用按原样使用，不需要 refmap。
+- **内容**（自定义植物和僵尸）来自 `api-plant`/`api-zombie`，模组自己的美术（它的种子包图标、重新着色的零售植物）来自 `api-resource`：注册一个定义会向本游戏容量固定的定义表写入一行（`SeedType.MAX_SEED_TYPES`、`ZombieType.MAX_ZOMBIE_TYPES`；空行表示"未注册"），API 的 Mixin 把定义的行为分派进游戏自己的方法——游戏自身没有注册表，也没有模组概念。种子选择器和图鉴都会在原版网格（第 0 页）之后的页面上显示已注册内容：玩家已解锁的已注册种子加入选择器的后续页面，图鉴的植物页也得到同样的后续页面（其僵尸页为零售范围之上的每个已定义僵尸各提供页面），条目的卡片显示注册时携带的名称和描述。
+- **事件**来自 API：`cn.enaium.fabricpvz.api.lawn.LawnEvents`（关卡开始/结束、波次、僵尸生成/死亡/受伤、植物放置/移除/受伤、收集阳光、种植校验、每一 tick、绘制前后）、`cn.enaium.fabricpvz.api.PvzFabricApi` 和 `cn.enaium.fabricpvz.api.mod.ModQuery`（Fabric Loader 的模组查询）。API 还自带一个 Fabric 风格的事件总线（`cn.enaium.fabricpvz.api.event`），而不是依赖 Fabric API 的 base 模块。
+- **模组从哪里加载。** 始终是游戏目录下的 `mods/`。只在类路径上的模组会在 loader 以开发模式运行时被发现（`-Dfabric.development=true`，`./gradlew run` 会传入）——模组自己的 `runClient` 就是这样工作的。API 在任何情况下都是 `mods/` 里的 jar，绝不是类路径条目：开发期间你要自己把 `fabric-api-<version>.jar` 复制到 `run/mods/`——构建不会往那里安装任何东西。
 
-Building a mod is one plugin line (`id("cn.enaium.fabricpvz.loom")` plus its version), published on the
-Gradle Plugin Portal by the `loom` repository; the toolchain brings the loader, Mixin, ASM, the API and
-the game (as a distribution, see above), plus a `runClient` task that boots the game through the real
-loader. A mod may be written in Kotlin as well as Java: the toolchain compiles Kotlin at the same
-class-file target as the Java sources, compiles the mod against `kotlin-stdlib` without bundling or
-publishing it, and brings the `fabric-language-kotlin` language module — the single owner of the
-`kotlin.*` runtime and the provider of the `"kotlin"` value adapter. A Kotlin mod declares that module
-in its `fabric.mod.json` and uses a `class` with a no-argument constructor (not an `object`) as its
-entry point, unless it names the adapter explicitly.
+构建模组只需要一行插件（`id("cn.enaium.fabricpvz.loom")` 加上它的版本），由 `loom` 仓库发布在 Gradle Plugin Portal 上；该工具链带来 loader、Mixin、ASM、API 和本游戏（以发行包形式，见上文），外加一个通过真实 loader 启动游戏的 `runClient` 任务。模组可以用 Kotlin 写，也可以用 Java：工具链以与 Java 源码相同的 class 文件目标编译 Kotlin，针对 `kotlin-stdlib` 编译模组但不打包、不发布它，并带来 `fabric-language-kotlin` 语言模块——`kotlin.*` 运行时的唯一所有者、`"kotlin"` 值适配器的提供者。Kotlin 模组在自己的 `fabric.mod.json` 中声明该模块，并使用带无参构造器的 `class`（而不是 `object`）作为入口点，除非它显式指定适配器。
 
-## Porting status
+## 移植状态
 
-The port is complete in the sense that every runnable upstream mode, screen and subsystem has been
-implemented; one `UnsupportedOperationException` remains in the game code, for the legacy `.dat`
-mid-level save format (below).
+移植已经完成：上游每一个可运行的模式、界面和子系统都已实现；游戏代码里只剩一个 `UnsupportedOperationException`，针对旧版 `.dat` 关卡中存档格式（见下）。
 
-> Status: `Done` = implemented and tested; `Partial` = the main mechanics are implemented but a few
-> branches throw `UnsupportedOperationException` and are annotated in code; `N/A` = the upstream
-> concept cannot or need not be mapped onto the Java side (with upstream evidence).
-> Verification: the JUnit suite (`./gradlew test`), pixel-level render-backend tests (software and a
-> real GPU backend), and real Steam-asset tests that skip themselves when the assets are not installed.
+> 状态：`Done` = 已实现且已测试；`Partial` = 主要机制已实现，但少数分支抛出 `UnsupportedOperationException` 并在代码中标注；`N/A` = 上游概念无法或无需映射到 Java 侧（附上游证据）。
+> 验证：JUnit 套件（`./gradlew test`）、像素级渲染后端测试（软件后端与真实 GPU 后端），以及在资源未安装时自动跳过的真实 Steam 资源测试。
 
-| Module | Status | Verification |
+| 模块 | 状态 | 验证 |
 |---|---|---|
-| Engine: SDL3 platform layer (window/input/cursor/clipboard/timing) | Done | `SdlRendererTest` + `SdlRendererGpuTest` (including a real Metal run) |
-| Engine: render backend (texture/rotate/flip/tint/clip/offscreen/readback/triangle) | Done | 7 pixel-level tests: 6 for the software renderer + 1 for real GPU (Metal) tinting/triangles |
-| Engine: Image/MemoryImage/Graphics/font (desc-parser bitmap fonts) | Done | Per-proxy tests + real font asset tests |
-| Engine: asset manifest/PAK/compile cache/DataSync/asset discovery (local + Steam) | Done | `ResourceManagerRealAssetsTest` (691/168/20 entries), `PakInterfaceTest`, `SteamLibraryFinderTest` |
-| Engine: audio (OGG/MO3/gain/fade) | Done | 62 audio tests, including 169 real OGG files and 2 MO3 (libopenmpt) |
-| Engine: Widget/Dialog/app main loop (100 Hz fixed step) | Done | `WidgetTest`/`WidgetManagerTest`/`SexyAppBaseTest` |
-| Game: Reanimator/Attachment/Atlas/particles/effects/Foley/Trail | Done | `ReanimatorTest`/`ParticleTest`/`FoleyTest` etc. + real reanim assets |
-| Game: Board/grid/waves/sun/mowers/draw layer order | Done | All 22 `BoardTest` tests green (adjudicated item by item against upstream); `GameBootSmokeTest`: boots with real Steam assets → Adventure 1-1 → 600 ticks without exceptions |
-| Game: plants/zombies/projectiles/coins/grid items (complete definition tables) | Done | `PlantTest` (53-row table)/`ZombieTest` (33-row table)/`ProjectileTest`/`CoinTest` |
-| Game: LawnApp/screens and dialogs/cutscenes | Done | `LawnAppTest`/per-screen tests/`CutSceneTest` |
-| Game: saves (users.dat/userN.dat/mid-level save .v4) | Done | `ProfileMgrTest` byte-level golden samples |
-| Game: Zen Garden (garden grid/pots/needs/Stinky/store/tutorial/leave) | Done | 34 `ZenGardenTest` tests (pixel↔grid, need state machine, growth and coins, Stinky state machine, sell-price table); `ChallengeModeCoverageTest` actually runs garden mode and asserts that `mZenGarden.mBoard` has taken over |
-| Game: Zombatar (editor/accessory table/palette/TOS/write back to profile) | Done | `ZombatarTest` 12 + `ZombatarWidgetTest` 10 + `ZombatarHeadTest` 3; 4 `GameSelectorTest` tests verifying the button→editor/TOS bindings |
-| Game: all challenge mode implementations (Beghouled·Twist / Scary Potter·vasebreaker / I,Zombie / Portal Combat / Slot Machine / Whack-a-Zombie / Zombiquarium / Squirrel / Tree of Wisdom / weather and Last Stand, etc.) | Done | 10 `ChallengeXxx` helpers with 193 tests in total; `ChallengeModeCoverageTest` starts each of the **73 modes**, runs 150 ticks and asserts their distinctive structures (pots, 4 portals, ≥7 squirrels, fish, tombstones, the slot-machine handle, Tree of Wisdom clouds, zombies' preset plants, …) |
-| Game: Crazy Dave store upsell cutscene (GAMEMODE_UPSELL) | Done | 12 `CutSceneTest` tests: the full 3300→3317 sequence (each stage desk, store/menu button handoff, `StoreScreen.getItemCost`) |
-| Game: Cheat dialog and level jump | Done | `CheatDialogTest` 18 + `LawnAppCheatTest` 8 (including the `sscanf` syntax family and the invalid-input branches) |
-| Game: mid-level saves (`.v4`) | Done | 19 `SaveGameTest` tests: in-progress level round-trip, byte-identical rewrite after reading, CRC/version rejection |
-| Game: legacy `.dat` mid-level saves | N/A | Upstream README: `.dat` is "raw memory dumps … Do not share this file across platforms"; the port recognizes them by the upstream criterion and gives an actionable hint (open with the upstream version to auto-migrate to `.v4`) without faking a decoder |
-| Fabric Loader integration (game provider + API + a real `mods/` directory) | Done | `FabricLoaderEndToEndTest` launches Fabric Loader 0.19.5 in a second JVM with the API jar, the example mod and a fixture mod as the only three jars of a real `mods/` directory — the API is on the class path in neither mode the test runs — and verifies the resolved mod list (game, loader, the API's five modules nested in its aggregate jar, all three mod jars), a mod Mixin applied to game classes, the API's hook chain reaching a mod listener, the fixture's plant and zombie registrations on a real board, and the game booting Adventure level 1 to `SCENE_PLAYING` (300 ticks with the mod's board Mixin running) |
-| Distribution / release (the `application` plugin's zip) | Done | `./gradlew distZip` → `pvz-portable-1.2.5-offline.zip` (`bin/` + `lib/` only, ~28 MB) and `./gradlew mcVersionZip` → `pvz-portable-1.2.5-online.zip` with the 36 LWJGL natives jars, the bundled `lib/native/windows-{x64,arm64}/` libopenmpt (so Windows needs no installed library) and no `mods/` directory; verified outside the repository: unpacked in `/tmp`, `mods/` created next to `bin/`, mod jars copied in, `./bin/pvz-portable` started from an unrelated working directory → Fabric Loader resolves the mods and the game reaches `SCENE_PLAYING` |
+| 引擎：SDL3 平台层（窗口/输入/光标/剪贴板/计时） | Done | `SdlRendererTest` + `SdlRendererGpuTest`（包含一次真实的 Metal 运行） |
+| 引擎：渲染后端（纹理/旋转/翻转/着色/裁剪/离屏/回读/三角形） | Done | 7 个像素级测试：6 个针对软件渲染器 + 1 个针对真实 GPU（Metal）的着色/三角形 |
+| 引擎：Image/MemoryImage/Graphics/字体（desc 解析器位图字体） | Done | 逐代理测试 + 真实字体资源测试 |
+| 引擎：资源清单/PAK/编译缓存/DataSync/资源发现（本地 + Steam） | Done | `ResourceManagerRealAssetsTest`（691/168/20 个条目）、`PakInterfaceTest`、`SteamLibraryFinderTest` |
+| 引擎：音频（OGG/MO3/增益/淡入淡出） | Done | 62 个音频测试，包括 169 个真实 OGG 文件和 2 个 MO3（libopenmpt） |
+| 引擎：Widget/Dialog/应用主循环（100 Hz 固定步长） | Done | `WidgetTest`/`WidgetManagerTest`/`SexyAppBaseTest` |
+| 游戏：Reanimator/Attachment/Atlas/粒子/特效/Foley/Trail | Done | `ReanimatorTest`/`ParticleTest`/`FoleyTest` 等 + 真实 reanim 资源 |
+| 游戏：Board/网格/波次/阳光/小推车/绘制层顺序 | Done | 全部 22 个 `BoardTest` 测试通过（逐条对照上游裁定）；`GameBootSmokeTest`：用真实 Steam 资源启动 → 冒险模式 1-1 → 600 tick 无异常 |
+| 游戏：植物/僵尸/弹射物/硬币/网格物品（完整定义表） | Done | `PlantTest`（53 行表）/`ZombieTest`（33 行表）/`ProjectileTest`/`CoinTest` |
+| 游戏：LawnApp/界面与对话框/过场动画 | Done | `LawnAppTest`/逐界面测试/`CutSceneTest` |
+| 游戏：存档（users.dat/userN.dat/关卡中存档 .v4） | Done | `ProfileMgrTest` 字节级黄金样本 |
+| 游戏：禅境花园（花园网格/花盆/需求/Stinky/商店/教程/离开） | Done | 34 个 `ZenGardenTest` 测试（像素↔网格、需求状态机、成长与硬币、Stinky 状态机、售价表）；`ChallengeModeCoverageTest` 实际运行花园模式并断言 `mZenGarden.mBoard` 已接管 |
+| 游戏：Zombatar（编辑器/配件表/调色板/TOS/写回存档） | Done | `ZombatarTest` 12 + `ZombatarWidgetTest` 10 + `ZombatarHeadTest` 3；4 个 `GameSelectorTest` 测试验证按钮→编辑器/TOS 绑定 |
+| 游戏：全部挑战模式实现（Beghouled·Twist / Scary Potter·Vasebreaker / I, Zombie / Portal Combat / Slot Machine / Whack-a-Zombie / Zombiquarium / Squirrel / Tree of Wisdom / 天气与 Last Stand 等） | Done | 10 个 `ChallengeXxx` 辅助类共 193 个测试；`ChallengeModeCoverageTest` 把 **73 个模式**逐一启动、各跑 150 tick，并断言它们各自独特的结构（花盆、4 个传送门、≥7 只松鼠、鱼、墓碑、老虎机拉杆、智慧树云朵、僵尸的预设植物等） |
+| 游戏：Crazy Dave 商店追加推销过场（GAMEMODE_UPSELL） | Done | 12 个 `CutSceneTest` 测试：完整的 3300→3317 序列（每个阶段的桌台、商店/菜单按钮交接、`StoreScreen.getItemCost`） |
+| 游戏：作弊对话框与关卡跳转 | Done | `CheatDialogTest` 18 + `LawnAppCheatTest` 8（包括 `sscanf` 语法族和无效输入分支） |
+| 游戏：关卡中存档（`.v4`） | Done | 19 个 `SaveGameTest` 测试：进行中关卡的往返、读取后逐字节相同的重写、CRC/版本拒绝 |
+| 游戏：旧版 `.dat` 关卡中存档 | N/A | 上游 README：`.dat` 是"原始内存转储……不要跨平台共享此文件"；移植版按上游标准识别它们并给出可操作的提示（用上游版本打开以自动迁移为 `.v4`），而不伪造解码器 |
+| Fabric Loader 集成（game provider + API + 真实 `mods/` 目录） | Done | `FabricLoaderEndToEndTest` 在第二个 JVM 中启动 Fabric Loader 0.19.5，让 API jar、示例模组和夹具模组作为真实 `mods/` 目录中仅有的三个 jar——在测试运行的两种模式下 API 都不在类路径上——并验证解析出的模组列表（游戏、loader、聚合 jar 内嵌的 API 五个模块、三个模组 jar）、应用到游戏类上的模组 Mixin、触达模组监听器的 API 钩子链、夹具在真实棋盘上的植物与僵尸注册，以及游戏启动冒险模式第 1 关直到 `SCENE_PLAYING`（300 tick，模组的 Board Mixin 处于运行中） |
+| 发行/发布（`application` 插件的 zip） | Done | `./gradlew distZip` → `pvz-portable-1.2.5-offline.zip`（仅 `bin/` + `lib/`，约 28 MB），`./gradlew mcVersionZip` → `pvz-portable-1.2.5-online.zip`，含 36 个 LWJGL natives jar、内置的 `lib/native/windows-{x64,arm64}/` libopenmpt（因此 Windows 无需安装库）且没有 `mods/` 目录；已在仓库外验证：解压到 `/tmp`、在 `bin/` 旁创建 `mods/`、复制模组 jar、从无关工作目录启动 `./bin/pvz-portable` → Fabric Loader 解析模组，游戏到达 `SCENE_PLAYING` |
 
-## Differences from upstream (deviation log)
+## 与上游的差异（偏差日志）
 
-| Item | Upstream | This port | Reason |
+| 项目 | 上游 | 本移植版 | 原因 |
 |---|---|---|---|
-| Window/rendering | SDL2 + SDL_GL (GLES2/GL2.1) + custom GL batching | **SDL3's `SDL_Renderer`** (Metal on macOS, software rendering when there is no GPU) | LWJGL only provides SDL3 bindings; it keeps 2D semantics consistent at the lowest code volume and risk |
-| Audio | SDL-Mixer-X fork + libopenmpt | **OpenAL + stb_vorbis**; MO3 via **libopenmpt** (JDK FFM) | no JVM version of SDL_mixer; the gain/fade semantics are kept |
-| Image decoding | libpng/libjpeg/built-in gif/TGA | **Java ImageIO** (PNG/JPEG/GIF) + self-implemented TGA | removes the native dependency |
-| Registry persistence | regemu (`mRegKey` is empty under real assets, so it has no effect) | same (the RegEmu implementation is retained) | consistent with upstream behaviour |
-| Compile cache | `cache64/` binary cache | retained, reading and writing the same cache format | see the asset/resource research notes |
-| Mixin | Sponge Mixin 0.8 | **the Sponge Mixin build that ships with the real Fabric Loader**, configured by `fabric.mod.json` `mixins` entries | no bespoke engine to maintain; mods use the standard Mixin API and config format |
-| Seed chooser | one grid of the retail seeds | **page 0 is that grid**; seed types the player has unlocked beyond the retail range (id ≥ `SeedType.NUM_SEEDS_IN_CHOOSER`, i.e. content a mod registered) get further pages, up to `SeedChooserScreen.CHOOSER_PAGE_SIZE` (48) per page in id order, with prev/next arrows beside "Let's Rock" | mod content needs somewhere to go in the chooser without disturbing the retail layout; with one page nothing beyond the grid is drawn or clickable, so the unmodded chooser is exactly upstream's |
-| Almanac | one fixed plant grid and one fixed zombie grid | **page 0 is each of those grids**; the plant page gets further pages for registered seed types the player has unlocked (id ≥ `SeedType.NUM_SEEDS_IN_CHOOSER`, `AlmanacDialog.ALMANAC_PLANT_PAGE_SIZE` = 48 per page in id order) and the zombie page gets them for defined zombie types above the retail range (id ≥ `ZombieType.NUM_ZOMBIE_TYPES`, 25 per page), with prev/next arrows and a `page/total` counter in the free stretch of the bottom button row | same rule as the chooser, and the game side stays neutral: names and descriptions go through the almanac's own `AlmanacDialog.getPlantDescriptionText` / `getZombieNameText` / `getZombieDescriptionText` seams, which `api-plant`/`api-zombie` inject for registered content; a single page draws no arrows and no counter, so the unmodded almanac is exactly upstream's |
-| Cached plant frame | `ReanimatorCache::MakeCachedPlantFrame` draws the separate `anim_head_idle` layer for a written-out list of seed types | the rule is read from the plant's reanimation (`anim_head_idle` exists ⇒ draw that layer), which is what the list stood for | the frame is what the cursor preview, the seed packet art and the almanac picture show, and the retail list left a plant registered with the same reanimation headless in all three; the retail set is unchanged (only the five pea shooters' reanimations carry that layer) |
-| Window and presentation | window created with `SDL_WINDOW_OPENGL \| SDL_WINDOW_RESIZABLE` (no high-DPI flag); every primitive is drawn straight into the window and scaled by SDL's logical presentation, and the window server stretches an 800x600 frame on a Retina display | the window requests `SDL_WINDOW_HIGH_PIXEL_DENSITY`; a frame is drawn 1:1 into an 800x600 offscreen **canvas** and the renderer composites that canvas into the drawable once per frame (upstream's `mScreenImage` architecture), filtering whole-number magnifications nearest and everything else linearly | the user asked for the SDL window's high-pixel mode; scaling every primitive distorts rotated/skewed quads and, at a fractional scale, copies some source pixels twice and others not at all (uneven text strokes) — see `../verification/VERIFICATION.md` §52. A deliberate deviation from upstream, not a porting shortcut |
+| 窗口/渲染 | SDL2 + SDL_GL（GLES2/GL2.1）+ 自定义 GL 批处理 | **SDL3 的 `SDL_Renderer`**（macOS 上为 Metal，无 GPU 时为软件渲染） | LWJGL 只提供 SDL3 绑定；它以最低的代码量和风险保持 2D 语义一致 |
+| 音频 | SDL-Mixer-X fork + libopenmpt | **OpenAL + stb_vorbis**；MO3 经由 **libopenmpt**（JDK FFM） | 没有 SDL_mixer 的 JVM 版本；增益/淡入淡出语义得以保留 |
+| 图像解码 | libpng/libjpeg/内置 gif/TGA | **Java ImageIO**（PNG/JPEG/GIF）+ 自实现 TGA | 去掉本地依赖 |
+| 注册表持久化 | regemu（真实资源下 `mRegKey` 为空，因此它没有效果） | 相同（保留 RegEmu 实现） | 与上游行为一致 |
+| 编译缓存 | `cache64/` 二进制缓存 | 保留，读写同一缓存格式 | 见资源相关研究笔记 |
+| Mixin | Sponge Mixin 0.8 | **随真实 Fabric Loader 附带的 Sponge Mixin 构建**，通过 `fabric.mod.json` 的 `mixins` 条目配置 | 无需维护自制引擎；模组使用标准 Mixin API 和配置格式 |
+| 种子选择器 | 一页零售种子网格 | **第 0 页就是该网格**；玩家解锁的超出零售范围的种子类型（id ≥ `SeedType.NUM_SEEDS_IN_CHOOSER`，即模组注册的内容）获得后续页面，每页按 id 顺序最多 `SeedChooserScreen.CHOOSER_PAGE_SIZE`（48）个，"Let's Rock" 旁有上一页/下一页箭头 | 模组内容需要在选择器中有容身之处，又不能打乱零售布局；只有一页时网格之外的任何东西都不绘制、不可点击，因此未装模组的选择器与上游完全一致 |
+| 图鉴 | 一个固定的植物网格和一个固定的僵尸网格 | **第 0 页就是这两个网格**；植物页为玩家已解锁的已注册种子类型获得后续页面（id ≥ `SeedType.NUM_SEEDS_IN_CHOOSER`，每页按 id 顺序 `AlmanacDialog.ALMANAC_PLANT_PAGE_SIZE` = 48 个），僵尸页为零售范围之上的已定义僵尸类型获得后续页面（id ≥ `ZombieType.NUM_ZOMBIE_TYPES`，每页 25 个），底栏按钮行的空余区域有上一页/下一页箭头和`页码/总数`计数器 | 与选择器相同的规则，且游戏侧保持中立：名称和描述经由图鉴自己的 `AlmanacDialog.getPlantDescriptionText` / `getZombieNameText` / `getZombieDescriptionText` 接缝，由 `api-plant`/`api-zombie` 为已注册内容注入；只有一页时不绘制箭头和计数器，因此未装模组的图鉴与上游完全一致 |
+| 缓存植物帧 | `ReanimatorCache::MakeCachedPlantFrame` 为一份写死的种子类型列表绘制单独的 `anim_head_idle` 层 | 规则改为从植物的重动画读取（存在 `anim_head_idle` ⇒ 绘制该层），这正是那份列表的本意 | 该帧是光标预览、种子包美术和图鉴图片所显示的内容，而零售列表让一个用相同重动画注册的植物在这三处都没有头；零售集合不变（只有五个豌豆射手的重动画带有该层） |
+| 窗口与呈现 | 窗口以 `SDL_WINDOW_OPENGL \| SDL_WINDOW_RESIZABLE` 创建（无高 DPI 标志）；每个图元直接画进窗口并由 SDL 的逻辑呈现缩放，窗口服务器在 Retina 显示器上拉伸 800x600 的帧 | 窗口请求 `SDL_WINDOW_HIGH_PIXEL_DENSITY`；每一帧 1:1 画进 800x600 的离屏**画布**，渲染器每帧把该画布合成到 drawable 一次（上游的 `mScreenImage` 架构），整数倍放大用最近邻过滤，其余用线性过滤 | 用户要求 SDL 窗口的高像素模式；缩放每个图元会扭曲旋转/倾斜的四边形，且在分数倍缩放下会把部分源像素复制两次、另一些完全丢失（文字笔画粗细不均）——见 `../verification/VERIFICATION.md` §52。这是对上游的刻意偏离，不是移植上的捷径 |
 
-## Development tasks
+## 开发任务
 
-The suite is JUnit 6.1.3 (`useJUnitPlatform()`), 1458 tests in 145 test classes. Every test gets a
-180-second wall-clock budget in `SEPARATE_THREAD` mode, so a stuck loop fails one test instead of
-hanging the build; the test JVM runs headless (`SDL_VIDEODRIVER=dummy` with the software renderer) and
-adds `-XstartOnFirstThread` on macOS. Tests that need real assets take them through
-`pvzp/TestAssets.java` (`-Dpvz.test.resources=<dir>` or the standard discovery chain) and are gated
-with `Assumptions`, so the suite stays green without the game installed.
+测试套件是 JUnit 6.1.3（`useJUnitPlatform()`），145 个测试类中共 1458 个测试。每个测试在 `SEPARATE_THREAD` 模式下有 180 秒的墙钟预算，卡死的循环只会让一个测试失败而不是挂起构建；测试 JVM 无头运行（`SDL_VIDEODRIVER=dummy` 配软件渲染器），macOS 上添加 `-XstartOnFirstThread`。需要真实资源的测试通过 `pvzp/TestAssets.java` 获取（`-Dpvz.test.resources=<dir>` 或标准发现链），并用 `Assumptions` 门控，因此没装游戏时套件依然全绿。
 
-Fixtures worth knowing when you write tests: `test/HeadlessTestApp.java` (fills the asset tables with
-stub images/fonts and a stub sound manager, so no real assets are needed after `new LawnApp()`),
-`lawn/LawnEntityTestSupport.java`, `pvzp/reanim/ReanimTestSupport.java`,
-`pvzp/audio/TestAudio.java` (builds WAVs in memory) and `contentmodfixture/` (the loader end-to-end
-fixture).
+写测试时值得了解的夹具：`test/HeadlessTestApp.java`（用桩图像/字体和桩声音管理器填充资源表，因此 `new LawnApp()` 之后不需要真实资源）、`lawn/LawnEntityTestSupport.java`、`pvzp/reanim/ReanimTestSupport.java`、`pvzp/audio/TestAudio.java`（在内存中构建 WAV）以及 `contentmodfixture/`（loader 端到端夹具）。
 
-These tasks run the real thing by hand (they are not part of `test`); all of them take their switches
-as Gradle properties (`-P…`):
+以下任务手工运行真实的东西（它们不属于 `test`）；所有开关都以 Gradle 属性（`-P…`）的形式传入：
 
-| Task | Purpose |
+| 任务 | 用途 |
 |---|---|
-| `./gradlew dumpWindow` | opens a real window and writes both images of every frame (0.5 s apart) to `build/window-dump/`: `frame-NNN.png` is the 800x600 canvas the game drew into, `window-NNN.png` what the window shows (the canvas composited into the drawable); each frame prints `appLogical=`/`canvas=`/`window=`/`present=`; `-Ppvz.renderer=software\|metal\|opengl\|…` selects the backend, `-Ppvz.window.dumpDir=…` the output directory |
-| `./gradlew sceneDump` | frames of one rendering scenario, for looking at a specific animation frame by frame; `-Ppvz.dump.scenario=graveRise\|fume\|packet\|zomboni` |
-| `./gradlew zoomDump` | the frames around the level-award seed packet being picked up (scaled up to 2×), plus a probe for the zoomed drawing's filtering; `-Ppvz.zoom.dumpDir/resDir/logClicks` |
-| `./gradlew playthrough` | plays Adventure mode end to end from the menu using **synthetic SDL events** through the real input path; `-Ppvz.play.firstLevel/lastLevel/firstMode/lastMode/tickBudget/fast/fromMenu/logClicks` |
-| `./gradlew bench` | fps / draw time / GC of the real loop; `-Ppvz.bench.seconds/level/zombies/cpuFrames/iterations/jfr` |
+| `./gradlew dumpWindow` | 打开一个真实窗口，把每帧的两幅图像（间隔 0.5 秒）写入 `build/window-dump/`：`frame-NNN.png` 是游戏画进去的 800x600 画布，`window-NNN.png` 是窗口显示的内容（合成进 drawable 的画布）；每帧打印 `appLogical=`/`canvas=`/`window=`/`present=`；`-Ppvz.renderer=software\|metal\|opengl\|…` 选择后端，`-Ppvz.window.dumpDir=…` 指定输出目录 |
+| `./gradlew sceneDump` | 某个渲染场景的若干帧，用于逐帧查看特定动画；`-Ppvz.dump.scenario=graveRise\|fume\|packet\|zomboni` |
+| `./gradlew zoomDump` | 关卡奖励种子包被拾取前后的若干帧（放大到 2 倍），外加一个针对缩放绘制过滤方式的探针；`-Ppvz.zoom.dumpDir/resDir/logClicks` |
+| `./gradlew playthrough` | 从菜单开始，用**合成 SDL 事件**经真实输入路径完整游玩冒险模式；`-Ppvz.play.firstLevel/lastLevel/firstMode/lastMode/tickBudget/fast/fromMenu/logClicks` |
+| `./gradlew bench` | 真实循环的 fps/绘制耗时/GC；`-Ppvz.bench.seconds/level/zombies/cpuFrames/iterations/jfr` |
 
-Three hard rules when writing such a driver (they are also documented in the drivers themselves):
+编写这类驱动程序的三条硬规则（驱动程序自身也有记录）：
 
-1. read the window contents back **before** `SDL_RenderPresent` (after present the back buffer is
-   undefined, and on Metal the read-back is blank);
-2. do the read-back on the frame-loop thread (the SDL renderer is not thread-safe; reading it from
-   another thread aborts on Metal);
-3. the "cheats" a driver uses (instakilling zombies, compressing the wave countdown) must live in the
-   driver's own hook listeners and **must not touch game code**.
+1. 在 `SDL_RenderPresent` **之前**回读窗口内容（present 之后后备缓冲区内容未定义，Metal 上回读是空白）；
+2. 在帧循环线程上做回读（SDL 渲染器不是线程安全的；从其他线程读取在 Metal 上会中止）；
+3. 驱动程序使用的"作弊"（秒杀僵尸、压缩波次倒计时）必须放在驱动自己的钩子监听器里，**绝不能改动游戏代码**。
 
-Two more things worth knowing before changing rendering code:
+改渲染代码之前还有两件事值得了解：
 
-- **Logical vs drawable size, and the canvas.** The port distinguishes the logical window size (used for app
-  layout, e.g. 800×600) from the drawable size (used for rendering, 2940×1790 pixels for a 1470×895-point
-  window on a Retina display). The `WINDOW_RESIZE` event carries only the logical size; feeding the drawable
-  size back in as the window size stretches the canvas and the window appears to show nothing. Rendering goes
-  the other way: the framework draws every frame 1:1 into an 800×600 **canvas** (an offscreen texture created
-  only when the drawable differs from the canvas) and `RendererBackend.compositeToOutput()`, called at the end
-  of `WidgetManager.drawScreen`, scales it into the drawable once (`SdlRenderer`). `renderOutputWidth/Height`
-  is the canvas, `presentedWidth/Height` the drawable, `readTexturePixels(0, ..)` reads the canvas and
-  `readPresentedPixels(..)` the window, and `logicalPresentationRect()` is in window **points** (mouse space).
-  On a window whose drawable equals the canvas none of this happens and the window is drawn into directly.
-- **Provenance markers.** Every ported type/method records its upstream origin in the javadoc —
-  `Ported from src/Lawn/Board.cpp:246 (BoardInitForPlayer)` — with the `src/...:<line>` kept in step
-  with the upstream source (355 of 375 files in `src/main`, about 2358 markers in total). Deviations
-  are marked `PORT-NOTE …` next to the code that deviates. These comments are the evidence chain for
-  "why does it look like this" and are expected to be kept accurate.
+- **逻辑尺寸与 drawable 尺寸，以及画布。** 移植版区分逻辑窗口尺寸（用于应用布局，例如 800×600）和 drawable 尺寸（用于渲染，Retina 显示器上 1470×895 点的窗口对应 2940×1790 像素）。`WINDOW_RESIZE` 事件只携带逻辑尺寸；把 drawable 尺寸当作窗口尺寸喂回去会拉伸画布，窗口看起来什么都没有。渲染方向相反：框架把每一帧 1:1 画进 800×600 的**画布**（仅当 drawable 与画布不同时才创建的离屏纹理），并在 `WidgetManager.drawScreen` 末尾调用的 `RendererBackend.compositeToOutput()` 把它一次性缩放进 drawable（`SdlRenderer`）。`renderOutputWidth/Height` 是画布，`presentedWidth/Height` 是 drawable，`readTexturePixels(0, ..)` 读画布，`readPresentedPixels(..)` 读窗口，`logicalPresentationRect()` 以窗口**点**为单位（鼠标空间）。在 drawable 等于画布的窗口上，这一切都不会发生，窗口被直接绘制。
+- **溯源标记。** 每个移植的类型/方法都在 javadoc 中记录其上游出处——`Ported from src/Lawn/Board.cpp:246 (BoardInitForPlayer)`——`src/...:<行号>` 与上游源码保持同步（`src/main` 的 375 个文件中有 355 个带标记，总计约 2358 个）。偏离处会在偏离代码旁边标注 `PORT-NOTE …`。这些注释是"为什么长这样"的证据链，预期保持准确。
 
-## Licence
+## 许可证
 
-- The port is **LGPL-3.0-or-later**, following the upstream project it is ported from
-  ([wszqkzqk/PvZ-Portable](https://github.com/wszqkzqk/PvZ-Portable), © 2026 Zhou Qiankang), with the
-  `Ported from …` provenance retained in the file headers. The licence texts and notices ship in this
-  repository, unchanged: `LICENSE` and `COPYING` (LGPL-3.0 + GPL-3.0), `NOTICE`, and
-  `SexyAppFramework-LICENSE.txt` (the SexyAppFramework-related parts follow the PopCap Games Framework
-  licence).
-- **No game assets are shipped**: *Plants vs. Zombies* is copyright PopCap/EA, and this project is not
-  affiliated with either. Runtime assets are supplied by the user (see
-  [Game assets](#game-assets-user-provided)).
-- Third-party dependencies: LWJGL (BSD-3), Fabric Loader (Apache-2.0), Sponge Mixin (MIT), ASM (BSD-3),
-  Gson (Apache-2.0), Kotlin (Apache-2.0 — the mod toolchain's Kotlin plugin, and the standard library
-  that the `fabric-language-kotlin` mod provides to Kotlin mods), JUnit (EPL-2.0, tests only), and
-  **libopenmpt 0.8.9 (BSD-3-Clause)** — the optional MO3 decoder, whose Windows build the distribution
-  ships in `lib/native/` with upstream's `LICENSE.txt` as `lib/native/libopenmpt-LICENSE.txt`. The four
-  codec DLLs next to it are upstream's own builds of, and carry the licences of, libmpg123 (LGPL-2.1),
-  libogg and libvorbis (BSD-3) and zlib; upstream lists those texts in the `Licenses/` directory of its
-  binary distribution (`lib.openmpt.org/files/libopenmpt/bin/`), which is not the archive this build
-  pins — the file-by-file provenance is in `lib/native/libopenmpt-natives.txt`.
+- 移植版采用 **LGPL-3.0-or-later**，跟随其移植自的上游项目（[wszqkzqk/PvZ-Portable](https://github.com/wszqkzqk/PvZ-Portable)，© 2026 Zhou Qiankang），文件头中保留 `Ported from …` 溯源信息。许可证文本和声明随本仓库原样分发：`LICENSE` 和 `COPYING`（LGPL-3.0 + GPL-3.0）、`NOTICE`，以及 `SexyAppFramework-LICENSE.txt`（SexyAppFramework 相关部分遵循 PopCap Games Framework 许可证）。
+- **不附带任何游戏资源**：《植物大战僵尸》版权归 PopCap/EA 所有，本项目与两者均无关联。运行时资源由用户提供（见 [游戏资源（用户提供）](#游戏资源用户提供)）。
+- 第三方依赖：LWJGL（BSD-3）、Fabric Loader（Apache-2.0）、Sponge Mixin（MIT）、ASM（BSD-3）、Gson（Apache-2.0）、Kotlin（Apache-2.0——模组工具链的 Kotlin 插件，以及 `fabric-language-kotlin` 模组提供给 Kotlin 模组的标准库）、JUnit（EPL-2.0，仅测试）以及 **libopenmpt 0.8.9（BSD-3-Clause）**——可选的 MO3 解码器，发行包把它的 Windows 版构建放在 `lib/native/`，并附上游的 `LICENSE.txt`（即 `lib/native/libopenmpt-LICENSE.txt`）。旁边的四个编解码 DLL 是上游自己对 libmpg123（LGPL-2.1）、libogg 和 libvorbis（BSD-3）和 zlib 的构建，并携带这些库的许可证；上游在其二进制发行版的 `Licenses/` 目录（`lib.openmpt.org/files/libopenmpt/bin/`）列出这些文本——那不是本构建锁定的压缩包；逐文件的溯源见 `lib/native/libopenmpt-natives.txt`。
 
-## Related projects
+## 相关项目
 
-The game is one repository of the **FabricPvZ** family. The others are dependencies of this one, not
-part of its build:
+本游戏是 **FabricPvZ** 家族中的一个仓库。其余仓库是它的依赖，但不属于它的构建：
 
-| Repository | What it is, and how this project relates to it |
+| 仓库 | 它是什么，以及本项目与它的关系 |
 |---|---|
-| `fabric-api` | the mod API: `api-base` (event bus + API entrypoints), `api-events` (lawn and lifecycle events), `api-plant` and `api-zombie` (content registration, plus the Mixins that dispatch a registered definition's behaviour into this game's methods), `api-resource` (a mod's own images: slots the game never draws, the game's own packet/cached-frame painters, per-track reanimation overrides, with its own entrypoint and Mixin). Its event types and Mixins are typed against this game's classes, and it is installed into `mods/` as the one aggregate mod jar `fabric-api` — never a class path dependency |
-| `loom` | the mod Gradle plugin `cn.enaium.fabricpvz.loom`, published on the Gradle Plugin Portal: one plugin line gives a mod the loader, Mixin, ASM, the API and **this game** as a distribution, plus a `runClient` task that boots the game through the real loader |
-| `pvz-example-mod` | reference mod: API events, mod hooks and a Mixin into the game. This project's loader end-to-end test loads its jar from `mavenLocal` |
-| `speed-mod` | game-speed controls (0.5×–3× and pause) as buttons next to the menu button |
-| `auto-collect-mod` | collects sun and coins for the player, with a toggle button |
+| `fabric-api` | 模组 API：`api-base`（事件总线 + API 入口点）、`api-events`（lawn 与生命周期事件）、`api-plant` 和 `api-zombie`（内容注册，以及把已注册定义的行为分派进本游戏方法的 Mixin）、`api-resource`（模组自己的图像：游戏从不绘制的槽位、游戏自己的种子包/缓存帧绘制器、按轨道的重动画覆盖，带自己的入口点和 Mixin）。它的事件类型和 Mixin 针对本游戏的类定义，并以唯一的聚合模组 jar `fabric-api` 安装进 `mods/`——绝不是类路径依赖 |
+| `loom` | 模组 Gradle 插件 `cn.enaium.fabricpvz.loom`，发布在 Gradle Plugin Portal 上：一行插件就给模组带来 loader、Mixin、ASM、API 和**本游戏**（以发行包形式），外加一个通过真实 loader 启动游戏的 `runClient` 任务 |
+| `pvz-example-mod` | 参考模组：API 事件、模组钩子和一个注入游戏的 Mixin。本项目的 loader 端到端测试从 `mavenLocal` 加载它的 jar |
+| `speed-mod` | 游戏速度控制（0.5×–3× 和暂停），以菜单按钮旁的按钮形式呈现 |
+| `auto-collect-mod` | 替玩家收集阳光和硬币，带一个开关按钮 |
 
-Mods declare `"pvz-portable": "*"` in their `fabric.mod.json`, so a new version of the game does not
-require mod changes.
+模组在自己的 `fabric.mod.json` 中声明 `"pvz-portable": "*"`，因此游戏出新版本不需要模组改动。
