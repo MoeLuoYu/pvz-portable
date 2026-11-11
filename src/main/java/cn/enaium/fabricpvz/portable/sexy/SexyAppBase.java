@@ -1,6 +1,9 @@
 package cn.enaium.fabricpvz.portable.sexy;
 
+import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.io.InputStream;
+import javax.imageio.ImageIO;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -3025,6 +3028,46 @@ public class SexyAppBase implements ButtonListener, DialogListener {
     }
 
     // SexyAppBase::MakeWindow (platform/default/Window.cpp:42)
+    /**
+     * PORT-NOTE (deviation): applies the window icon right after the window is created - the picture
+     * the taskbar and the window frame show from the first moment. The retail Windows build carried
+     * them in the executable's resources ({@code IDI_MAIN_ICON}); an SDL window has none unless one
+     * is set, so the artwork extracted from the retail executable ships bundled - the 256x256
+     * surface at {@code /pvzp/window-icon.png} for every platform, and the whole group at {@code
+     * /pvzp/window-icon.ico} whose members the platforms that can (Windows) show per slot (a
+     * complete flower in the title bar, the zombie hand in the taskbar). Silent when a resource is
+     * absent.
+     */
+    private void applyWindowIcon() {
+        try (InputStream in = SexyAppBase.class.getResourceAsStream("/pvzp/window-icon.png")) {
+            if (in != null) {
+                BufferedImage anImage = ImageIO.read(in);
+                if (anImage != null) {
+                    int aWidth = anImage.getWidth();
+                    int aHeight = anImage.getHeight();
+                    int[] aPixels = anImage.getRGB(0, 0, aWidth, aHeight, null, 0, aWidth);
+                    byte[] anRgba = new byte[aWidth * aHeight * 4];
+                    for (int i = 0; i < aPixels.length; i++) {
+                        anRgba[i * 4] = (byte) ((aPixels[i] >> 16) & 0xFF);
+                        anRgba[i * 4 + 1] = (byte) ((aPixels[i] >> 8) & 0xFF);
+                        anRgba[i * 4 + 2] = (byte) (aPixels[i] & 0xFF);
+                        anRgba[i * 4 + 3] = (byte) ((aPixels[i] >>> 24) & 0xFF);
+                    }
+                    mPlatformBackend.setWindowIcon(aWidth, aHeight, anRgba);
+                }
+            }
+        } catch (IOException anException) {
+            Common.logWarnLn("window icon failed to load: {}", anException.toString());
+        }
+        try (InputStream in = SexyAppBase.class.getResourceAsStream("/pvzp/window-icon.ico")) {
+            if (in != null) {
+                mPlatformBackend.setWindowIconGroup(in.readAllBytes());
+            }
+        } catch (IOException anException) {
+            Common.logWarnLn("window icon group failed to load: {}", anException.toString());
+        }
+    }
+
     public void makeWindow() {
         if (mPlatformBackend == null) {
             // Default host wiring: SDL3 through the LWJGL bindings. Tests/embedders may inject their
@@ -3035,6 +3078,7 @@ public class SexyAppBase implements ButtonListener, DialogListener {
             mPlatformBackend.init(new PlatformBackend.Options(mWidth, mHeight, mTitle,
                     !mFullScreenWindow, false, !mIsWindowed));
             mPlatformBackend.setTitle(mTitle);
+            applyWindowIcon();
             mIsPhysWindowed = mIsWindowed;
         }
         if (mRendererBackend == null && mPlatformBackend != null) {

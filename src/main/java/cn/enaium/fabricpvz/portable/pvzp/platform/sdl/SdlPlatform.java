@@ -12,6 +12,7 @@ import org.lwjgl.sdl.SDLMessageBox;
 import org.lwjgl.sdl.SDLMisc;
 import org.lwjgl.sdl.SDLMouse;
 import org.lwjgl.sdl.SDLPixels;
+import org.lwjgl.sdl.SDLProperties;
 import org.lwjgl.sdl.SDLSurface;
 import org.lwjgl.sdl.SDLTimer;
 import org.lwjgl.sdl.SDLVideo;
@@ -376,6 +377,50 @@ public final class SdlPlatform implements PlatformBackend {
     public void setTitle(String title) {
         if (mWindow != 0) {
             SDLVideo.SDL_SetWindowTitle(mWindow, title);
+        }
+    }
+
+    // No upstream equivalent: the retail Windows build showed its icon from the executable's
+    // resources. An SDL window carries none unless set explicitly, so the icon (extracted from the
+    // retail executable, applied by SexyAppBase.applyWindowIcon) is pushed into the window here.
+    // The pixels arrive top-down RGBA; SDL_PIXELFORMAT_ABGR8888 is exactly that byte order.
+    @Override
+    public void setWindowIcon(int width, int height, byte[] rgba) {
+        if (mWindow == 0 || rgba == null || rgba.length != width * height * 4) {
+            return;
+        }
+        // MemoryUtil, not MemoryStack: the 256x256 icon is 256 KB, past the default thread stack's
+        // 64 KB, and MemoryStack answers an over-limit malloc with
+        // OutOfMemoryError("Out of stack space") - one that escaped JUnit and killed the test
+        // executor once already.
+        ByteBuffer aPixels = MemoryUtil.memAlloc(rgba.length);
+        try {
+            aPixels.put(rgba).flip();
+            SDL_Surface aSurface = SDLSurface.SDL_CreateSurfaceFrom(width, height,
+                    SDLPixels.SDL_PIXELFORMAT_ABGR8888, aPixels, width * 4);
+            if (aSurface != null) {
+                SDLVideo.SDL_SetWindowIcon(mWindow, aSurface);
+                SDLSurface.SDL_DestroySurface(aSurface);
+            }
+        } finally {
+            MemoryUtil.memFree(aPixels);
+        }
+    }
+
+    // SDL scales one surface for both the title bar and the taskbar, while Windows shows different
+    // members of the retail icon group there (a complete flower at 16x16, the zombie hand at 32x32
+    // and up). On Windows the group therefore goes through user32 (WM_SETICON) on top of the SDL
+    // surface icon; on the other platforms the SDL icon from setWindowIcon covers every use.
+    @Override
+    public void setWindowIconGroup(byte[] icoFile) {
+        if (mWindow == 0 || icoFile == null || !Win32WindowIcon.available()) {
+            return;
+        }
+        int aProperties = SDLVideo.SDL_GetWindowProperties(mWindow);
+        long anHwnd = SDLProperties.SDL_GetPointerProperty(aProperties,
+                SDLVideo.SDL_PROP_WINDOW_WIN32_HWND_POINTER, 0);
+        if (anHwnd != 0) {
+            Win32WindowIcon.apply(anHwnd, icoFile);
         }
     }
 

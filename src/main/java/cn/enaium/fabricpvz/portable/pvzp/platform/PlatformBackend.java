@@ -57,6 +57,30 @@ public interface PlatformBackend {
     void setTitle(String title);
 
     /**
+     * Sets the window/taskbar icon from top-down RGBA pixels ({@code rgba.length == width * height *
+     * 4}); no effect when the window was never created, and a no-op by default so test backends need
+     * not implement it.
+     *
+     * <p>PORT-NOTE (deviation): the retail Windows build showed its icon from the executable's
+     * resources ({@code IDI_MAIN_ICON}); an SDL window carries none unless one is set explicitly, so
+     * this port applies the artwork extracted from the retail executable (bundled at {@code
+     * /pvzp/window-icon.png}, applied by {@code SexyAppBase.applyWindowIcon}).
+     */
+    default void setWindowIcon(int width, int height, byte[] rgba) {
+    }
+
+    /**
+     * Applies a whole icon group (a complete {@code .ico} file's bytes) on top of {@link
+     * #setWindowIcon}: the retail icon group shows a different member in the small (title bar) and
+     * the big (taskbar) slot - a complete flower at 16x16, the zombie hand at 32x32 and up - and
+     * only the platform's own icon selection can honor that. A no-op by default; the SDL
+     * implementation runs it through user32's {@code WM_SETICON} on Windows only, so on the other
+     * platforms the surface from {@code setWindowIcon} covers every use.
+     */
+    default void setWindowIconGroup(byte[] icoFile) {
+    }
+
+    /**
      * Switches the existing window between windowed and fullscreen.
      *
      * <p>Upstream does this inside {@code Window::MakeWindow} (platform/default/Window.cpp:44-47, the

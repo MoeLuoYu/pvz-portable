@@ -120,7 +120,11 @@ public class SexyApp extends SexyAppBase {
 
         String aNewTitle = getString("Title", "");
         if (!aNewTitle.isEmpty()) {
-            mTitle = aNewTitle + " " + mProductVersion;
+            // PORT-NOTE (deviation): upstream composed aNewTitle + " " + mProductVersion
+            // (SexyApp.cpp:143). The slot after the title carries the edition tag "GOTY" instead of
+            // the port's build version: the window presents itself as the retail edition the assets
+            // come from, and the port's own version stays in the startup log and the product line.
+            mTitle = aNewTitle + " GOTY";
         }
     }
 

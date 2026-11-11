@@ -225,7 +225,10 @@ public class LawnApp extends SexyApp {
         mProductVersion = cn.enaium.fabricpvz.portable.BuildInfo.version();
         mBuildNum = cn.enaium.fabricpvz.portable.BuildInfo.buildNumber();
         mCommitDate = cn.enaium.fabricpvz.portable.BuildInfo.commitDate();
-        mTitle = "PvZ Portable";
+        // The window title carries the retail edition the assets come from - "GOTY" - in the slot a
+        // version number would occupy: the port's own version stays in the startup log, the product
+        // line and the package names.
+        mTitle = "PvZ Portable GOTY";
         mCustomCursorsEnabled = false;
         mPlayerInfo = null;
         mLastLevelStats = new LevelStats();
