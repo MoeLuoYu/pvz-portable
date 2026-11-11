@@ -288,6 +288,7 @@ gh release create "$VERSION" "build/distributions/pvz-portable-$VERSION.zip" \
 | 窗口与呈现 | 窗口以 `SDL_WINDOW_OPENGL \| SDL_WINDOW_RESIZABLE` 创建（无高 DPI 标志）；每个图元直接画进窗口并由 SDL 的逻辑呈现缩放，窗口服务器在 Retina 显示器上拉伸 800x600 的帧 | 窗口请求 `SDL_WINDOW_HIGH_PIXEL_DENSITY`；每一帧 1:1 画进 800x600 的离屏**画布**，渲染器每帧把该画布合成到 drawable 一次（上游的 `mScreenImage` 架构），整数倍放大用最近邻过滤，其余用线性过滤 | 用户要求 SDL 窗口的高像素模式；缩放每个图元会扭曲旋转/倾斜的四边形，且在分数倍缩放下会把部分源像素复制两次、另一些完全丢失（文字笔画粗细不均）——见 `../verification/VERIFICATION.md` §52。这是对上游的刻意偏离，不是移植上的捷径 |
 | 重新开始按钮 | 按钮标签用 `[RESTART_LEVEL]`（`ContinueDialog.cpp` / `NewOptionsDialog.cpp`） | 两处按钮（"继续游戏？"对话框与关卡内选项菜单）改用 `[RESTART_BUTTON]` | 零售字符串表里 `RESTART_LEVEL` 的值是一句确认问话（"你确定想要重新开始这一关卡吗？"）而非按钮文本，按钮文本在 `RESTART_BUTTON`（"重新开始"）下；照抄上游会让按钮显示整句问话 |
 | 存档中的字幕文本 | 关卡存档按原始字节同步字幕标签（`SaveGame.cpp:690-701`，英文零售版里即 ASCII） | 字幕标签的定长缓冲改用 UTF-8 编解码（`SaveGame.syncFixedString`） | 本移植版运行在本地化零售资源上，字幕标签是中文文本；ISO_8859_1 之类"逐字节原样"编解码会在**写入时**把每个汉字替换成 `?`（0x3F），于是"提示期间保存退出再进入"后字幕显示为一排问号。改用 UTF-8 后标签原样往返；仅影响 `MessageWidget` 的两个标签缓冲 |
+| 编译缓存键 | 缓存路径按传入的 XML 路径原样拼接（`Definition.cpp:560-569`；游戏自身只传资源相对名） | 缓存键经 `CompiledCache.normalizeCacheKey` 归一（折叠分隔符、剥资源根/盘符前缀；相对名原样不动） | 上游在 POSIX 下把绝对路径拼进相对缓存目录得到的是合法（虽然怪异的）文件名，Windows 上盘符冒号会让编译缓存直接抛 `InvalidPathException`——测试夹具与散文件场景会传入绝对路径。键只需稳定且合法，读写两侧经同一方法保持对称 |
 
 ## 开发任务
 

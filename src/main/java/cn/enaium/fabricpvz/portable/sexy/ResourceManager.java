@@ -648,6 +648,11 @@ public class ResourceManager {
             fail(mXMLParser.getErrorText());
         }
 
+        // Upstream frees the parser member here, and ~XMLParser closes the file handle; the port
+        // owns that explicitly — an open handle keeps a loose file undeletable on Windows.
+        if (mXMLParser != null) {
+            mXMLParser.close();
+        }
         mXMLParser = null;
 
         return !mHasFailed;
@@ -655,6 +660,10 @@ public class ResourceManager {
 
     /** Ported from ResourceManager.cpp:545-588. */
     public boolean parseResourcesFile(String theFilename) {
+        // Assigning the member upstream frees the previous parser (and its file handle).
+        if (mXMLParser != null) {
+            mXMLParser.close();
+        }
         mXMLParser = new XMLParser();
         if (!mXMLParser.openFile(theFilename)) {
             fail("Resource file not found: " + theFilename);

@@ -16,6 +16,8 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import cn.enaium.fabricpvz.portable.sexy.pak.PakInterface;
+
 /**
  * Ported from src/SexyAppFramework/Common.h:123 (namespace Sexy) and
  * src/SexyAppFramework/Common.cpp:38 (global definitions).
@@ -1008,7 +1010,10 @@ public final class Common {
         if (thePath == null || thePath.isEmpty()) {
             return false;
         }
-        return pathFromU8(thePath).isAbsolute();
+        // PORT-NOTE: java.nio's isAbsolute() is platform-bound — '/a' is not absolute on Windows —
+        // while upstream's check (Common.cpp:299) is syntactic: a leading separator or a drive
+        // letter. That is exactly the rule PakInterface.isPathRooted applies, so the port delegates.
+        return PakInterface.isPathRooted(thePath);
     }
 
     /** Ported from src/SexyAppFramework/Common.cpp:330. */
@@ -1110,11 +1115,11 @@ public final class Common {
             return theDirectory == null ? "" : theDirectory;
         }
 
-        try {
-            return Paths.get(theDirectory).normalize().toString();
-        } catch (RuntimeException e) {
-            return theDirectory;
-        }
+        // PORT-NOTE: upstream folds separators to '/' and lexically normalizes the string itself;
+        // java.nio's normalize() would inject the platform separator on Windows ('a/b' came back
+        // as 'a\b'), which the game's internal path conventions treat as an ordinary name
+        // character — the port folds with the pak interface's lexical normal instead.
+        return PakInterface.lexicalNormal(theDirectory.replace('\\', '/'));
     }
 
     // ------------------------------------------------------------------

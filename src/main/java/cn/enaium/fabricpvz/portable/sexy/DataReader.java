@@ -22,7 +22,7 @@ import cn.enaium.fabricpvz.portable.sexy.pak.PakSource;
  * <p>Upstream {@code DataReader::Rewind} only rewinds the memory cursor ({@code mDataPos}); the
  * same restriction is kept here.
  */
-public class DataReader {
+public class DataReader implements AutoCloseable {
 
     protected RandomAccessFile mFile;
     protected byte[] mData;

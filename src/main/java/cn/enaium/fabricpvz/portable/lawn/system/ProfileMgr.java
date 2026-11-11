@@ -98,9 +98,11 @@ public class ProfileMgr {
 
     /** Ported from src/Lawn/System/ProfileMgr.cpp:92-109. */
     public void load() {
-        try {
+        // try-with-resources where upstream relies on the DataReader's C++ destructor
+        // (ProfileMgr.cpp:92-109): an open handle keeps the file undeletable on Windows, so the
+        // port owns the handle explicitly.
+        try (DataReader aReader = new DataReader()) {
             String aFileName = Common.getAppDataPath("userdata/users.dat");
-            DataReader aReader = new DataReader();
             if (aReader.openFile(aFileName)) {
                 DataSync aSync = new DataSync(aReader);
                 syncState(aSync);

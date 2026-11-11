@@ -231,9 +231,11 @@ public class PlayerInfo {
 
     /** Ported from src/Lawn/System/PlayerInfo.cpp:215-236. */
     public void loadDetails() {
-        try {
+        // try-with-resources where upstream relies on the DataReader's C++ destructor
+        // (PlayerInfo.cpp:215-236): an open handle keeps the file undeletable on Windows (a test's
+        // temp directory cleanup trips over it), so the port owns the handle explicitly.
+        try (DataReader aReader = new DataReader()) {
             String aFileName = Common.getAppDataPath("userdata/user" + Integer.toUnsignedString(mId) + ".dat");
-            DataReader aReader = new DataReader();
             if (!aReader.openFile(aFileName)) {
                 return;
             }

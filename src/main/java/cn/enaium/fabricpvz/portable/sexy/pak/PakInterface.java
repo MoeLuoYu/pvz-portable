@@ -87,7 +87,8 @@ public final class PakInterface {
         return path.toUpperCase(Locale.ROOT);
     }
 
-    private static boolean isPathRooted(String path) {
+    /** Upstream PakInterface::IsPathRooted. Also what Common.isPathRooted keys on. */
+    public static boolean isPathRooted(String path) {
         if (path.isEmpty()) {
             return false;
         }
@@ -99,8 +100,9 @@ public final class PakInterface {
                 && path.charAt(1) == ':';
     }
 
-    /** Equivalent of std::filesystem::path::lexically_normal for '/'-separated paths. */
-    private static String lexicalNormal(String path) {
+    /** Equivalent of std::filesystem::path::lexically_normal for '/'-separated paths. Also what
+     * Common.removeTrailingSlash is built on: the game's internal paths always use '/'. */
+    public static String lexicalNormal(String path) {
         if (path.isEmpty()) {
             return "";
         }

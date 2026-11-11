@@ -237,12 +237,21 @@ public class PropertiesParser {
             fail(mXMLParser.getErrorText());
         }
 
+        // Upstream frees the parser member here, and ~XMLParser closes the file handle; the port
+        // owns that explicitly — an open handle keeps a loose file undeletable on Windows.
+        if (mXMLParser != null) {
+            mXMLParser.close();
+        }
         mXMLParser = null;
 
         return !mHasFailed;
     }
 
     public boolean parsePropertiesBuffer(Buffer theBuffer) {
+        // Assigning the member upstream frees the previous parser (and its file handle).
+        if (mXMLParser != null) {
+            mXMLParser.close();
+        }
         mXMLParser = new XMLParser();
 
         String aString = theBuffer.toUTF8String();
@@ -256,6 +265,10 @@ public class PropertiesParser {
     }
 
     public boolean parsePropertiesFile(String theFilename) {
+        // Assigning the member upstream frees the previous parser (and its file handle).
+        if (mXMLParser != null) {
+            mXMLParser.close();
+        }
         mXMLParser = new XMLParser();
         mXMLParser.openFile(theFilename);
         return doParseProperties();

@@ -20,6 +20,7 @@ import java.util.zip.Inflater;
 
 import cn.enaium.fabricpvz.portable.lawn.PvzpCurves;
 import cn.enaium.fabricpvz.portable.sexy.Common;
+import cn.enaium.fabricpvz.portable.sexy.CompiledCache;
 import cn.enaium.fabricpvz.portable.sexy.PerfTimer;
 import cn.enaium.fabricpvz.portable.sexy.SexyVector2;
 import cn.enaium.fabricpvz.portable.sexy.graphics.Font;
@@ -218,12 +219,17 @@ public final class Definition {
 
     /** Ported from src/PvzpLib/Definition.cpp:560-563 ({@code DefinitionGetCompiledFilePathFromXMLFilePath}). */
     public static String getCompiledFilePathFromXMLFilePath(String theXMLFilePath) {
-        return "compiled/" + theXMLFilePath + ".compiled";
+        // PORT-NOTE: the key is built over CompiledCache.normalizeCacheKey — see there for why the
+        // port normalizes where upstream joins the path verbatim (Windows cannot carry an absolute
+        // path's ':' under a relative cache directory).
+        return "compiled/" + CompiledCache.normalizeCacheKey(theXMLFilePath) + ".compiled";
     }
 
     /** Ported from src/PvzpLib/Definition.cpp:565-569 ({@code DefinitionGetCompiledCacheFullPath}). */
     public static String getCompiledCacheFullPath(String theCompiledFilePath) {
-        return Common.getAppDataPath(COMPILED_CACHE_ROOT + theCompiledFilePath);
+        // PORT-NOTE: normalized like every cache key (CompiledCache.normalizeCacheKey) — upstream
+        // joins the compiled path verbatim, and a raw absolute path dies on Windows.
+        return Common.getAppDataPath(COMPILED_CACHE_ROOT + CompiledCache.normalizeCacheKey(theCompiledFilePath));
     }
 
     /**

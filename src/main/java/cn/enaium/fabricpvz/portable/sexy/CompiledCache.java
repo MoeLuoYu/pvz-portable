@@ -5,9 +5,12 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Locale;
 import java.util.zip.DataFormatException;
 import java.util.zip.Deflater;
 import java.util.zip.Inflater;
+
+import cn.enaium.fabricpvz.portable.sexy.pak.PakInterface;
 
 /**
  * Ported from src/PvzpLib/Definition.cpp:534-569, 578-673, 1240-1276 (the {@code *.compiled}
@@ -50,7 +53,50 @@ public final class CompiledCache {
 
     /** Ported from Definition.cpp:560-563. */
     public static String getCompiledFilePathFromXmlFilePath(String theXMLFilePath) {
-        return "compiled/" + theXMLFilePath + ".compiled";
+        // PORT-NOTE: the key is built over normalizeCacheKey — see there for why the port
+        // normalizes where upstream (Definition.cpp:560-563) joins the path verbatim.
+        return "compiled/" + normalizeCacheKey(theXMLFilePath) + ".compiled";
+    }
+
+    /**
+     * Normalizes an XML path into the form the compiled-cache key uses: '/' separators, a
+     * resource-folder prefix stripped (mirroring {@link PakInterface#normalizePakPath}, but
+     * preserving letter case the way upstream cache file names do), and an absolute root or
+     * drive-letter prefix removed.
+     *
+     * <p>PORT-NOTE: upstream joins the path verbatim; the game's own flows only ever pass
+     * resource-relative names, which this method leaves untouched — so the cache keys a normal run
+     * produces are exactly upstream's. The normalization exists for the forms a fixture or a loose
+     * file handed to the loader can take: on POSIX an absolute path under a relative directory is a
+     * legal (if odd) file name, on Windows the drive letter's ':' throws InvalidPathException and
+     * the compile cache dies with it. A cache key only has to be stable and legal, and every
+     * reader rebuilds it through the same method, so the stripped forms stay symmetric.
+     */
+    public static String normalizeCacheKey(String theXMLFilePath) {
+        String aPath = theXMLFilePath.replace('\\', '/');
+
+        String aFolder = PakInterface.getInstance().getResourceFolder().replace('\\', '/');
+        if (!aFolder.isEmpty() && aFolder.endsWith("/")) {
+            aFolder = aFolder.substring(0, aFolder.length() - 1);
+        }
+        if (!aFolder.isEmpty()) {
+            String aLower = aPath.toLowerCase(Locale.ROOT);
+            String aFolderLower = aFolder.toLowerCase(Locale.ROOT);
+            if (aLower.equals(aFolderLower)) {
+                return "";
+            }
+            if (aLower.startsWith(aFolderLower + "/")) {
+                aPath = aPath.substring(aFolder.length() + 1);
+            }
+        }
+
+        if (aPath.length() >= 2 && Character.isLetter(aPath.charAt(0)) && aPath.charAt(1) == ':') {
+            aPath = aPath.substring(2);
+        }
+        while (aPath.startsWith("/")) {
+            aPath = aPath.substring(1);
+        }
+        return aPath;
     }
 
     /** Ported from Definition.cpp:565-569. */
@@ -59,7 +105,10 @@ public final class CompiledCache {
         if (!base.isEmpty() && !base.endsWith("/") && !base.endsWith("\\")) {
             base += "/";
         }
-        return base + CACHE_ROOT + theCompiledFilePath;
+        // PORT-NOTE: normalized like every cache key (see normalizeCacheKey) — upstream joins the
+        // compiled path verbatim, and a raw absolute path dies on Windows where a caller hands one
+        // in; the cwd-relative fallback of readCompiled then takes over, exactly as upstream.
+        return base + CACHE_ROOT + normalizeCacheKey(theCompiledFilePath);
     }
 
     /** Ported from Definition.cpp:1240-1248. Prepends the header and zlib-deflates the payload. */
