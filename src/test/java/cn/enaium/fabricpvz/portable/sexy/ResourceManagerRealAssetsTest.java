@@ -55,8 +55,13 @@ class ResourceManagerRealAssetsTest {
         assertEquals(20, aManager.getNumFonts(""));
         assertEquals(879, aManager.getNumResources(""));
 
-        // Known ids used by the game resolve to members that exist on disk/in the pak.
-        assertImageMember(aPak, aManager, "IMAGE_TITLESCREEN", "images/TITLESCREEN.PNG");
+        // Known ids used by the game resolve to members that exist on disk/in the pak. The retail
+        // variants rename the title screen's container — PNG in the English retail, JPG in the
+        // Chinese GOTY (TestAssets.variantOf fingerprints the mounted pak); the other two members
+        // are spelled the same in both.
+        boolean chinese = TestAssets.variantOf(aPak) == TestAssets.ResourceVariant.CHINESE_GOTY;
+        assertImageMember(aPak, aManager, "IMAGE_TITLESCREEN",
+                chinese ? "images/TITLESCREEN.JPG" : "images/TITLESCREEN.PNG");
         assertImageMember(aPak, aManager, "IMAGE_LOADBAR_DIRT", "images/LOADBAR_DIRT.PNG");
         assertSoundMember(aPak, aManager, "SOUND_BUTTONCLICK", "sounds/BUTTONCLICK.OGG");
 

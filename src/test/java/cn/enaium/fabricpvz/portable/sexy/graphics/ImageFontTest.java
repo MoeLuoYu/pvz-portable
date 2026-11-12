@@ -1,5 +1,6 @@
 package cn.enaium.fabricpvz.portable.sexy.graphics;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -9,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -173,7 +175,11 @@ class ImageFontTest {
         assertFalse(fd.parseDescriptorLine("LayerSetImageMap Main CharList ((0,0,5,10))"));
     }
 
-    /** Splits a descriptor file into ';'-separated commands, ignoring separators inside quotes. */
+    /** Splits a descriptor file into ';'-separated commands, ignoring separators inside quotes.
+     * Carriage returns are dropped up front, exactly as {@code DescParser.loadDescriptor} does
+     * (DescParser.cpp): the pak's CRLF descriptors otherwise pollute every token with a '\r', and
+     * the numbers stop being immediates — the Chinese GOTY descriptor (CRLF, like the English one)
+     * was unrecoverable through this splitter for that reason. */
     private static List<String> splitDescriptor(String content) {
         List<String> commands = new ArrayList<>();
         StringBuilder current = new StringBuilder();
@@ -183,6 +189,9 @@ class ImageFontTest {
 
         for (int i = 0; i < content.length(); i++) {
             char c = content.charAt(i);
+            if (c == '\r') {
+                continue;
+            }
             if (escaped) {
                 current.append(c);
                 escaped = false;
@@ -230,19 +239,32 @@ class ImageFontTest {
         }
         assertTrue(content.contains("LayerSetImage"), "descriptor should name its glyph image");
 
-        // The companion glyph sheet must exist in the pak and be a decodable GIF. Retail main.pak
+        // The companion glyph sheet must exist in the pak and be a decodable image. Retail main.pak
         // ships no ContinuumBold14.png/gif: `LayerSetImage Main 'ContinuumBold14'` resolves through
         // ImageLib::GetImage's alpha-companion probe, alphaPath1 = "_" + theFilename
         // (ImageLib.cpp:1277-1286), which is the _ContinuumBold14.gif member; GetImage then repaints
         // it with gAlphaComposeColor because no base image was found (ImageLib.cpp:1296-1307,
-        // ApplyAlphaAsImage), so the sheet's blue channel is the glyph mask.
-        assertTrue(pakInterface.exists("data/_ContinuumBold14.gif"),
-                "glyph sheet should ship alongside the descriptor as data/_ContinuumBold14.gif");
-        byte[] sheetBytes = pakInterface.requireResource("data/_ContinuumBold14.gif");
-        assertEquals("GIF89a", new String(sheetBytes, 0, 6, StandardCharsets.ISO_8859_1),
-                "the shipped glyph sheet is a GIF");
-        assertTrue(((sheetBytes[6] & 0xFF) | ((sheetBytes[7] & 0xFF) << 8)) > 0, "GIF width");
-        assertTrue(((sheetBytes[8] & 0xFF) | ((sheetBytes[9] & 0xFF) << 8)) > 0, "GIF height");
+        // ApplyAlphaAsImage), so the sheet's blue channel is the glyph mask. The Chinese GOTY
+        // variant ships the very same sheet as PNG; both decode by content.
+        boolean chinese = TestAssets.variantOf(pakInterface) == TestAssets.ResourceVariant.CHINESE_GOTY;
+        String sheetPath = chinese ? "data/_ContinuumBold14.png" : "data/_ContinuumBold14.gif";
+        assertTrue(pakInterface.exists(sheetPath),
+                "glyph sheet should ship alongside the descriptor as " + sheetPath);
+        byte[] sheetBytes = pakInterface.requireResource(sheetPath);
+        if (chinese) {
+            // PNG: 8-byte signature, then IHDR's width/height (big-endian at offsets 16 and 20).
+            assertArrayEquals(new byte[]{(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n'},
+                    Arrays.copyOf(sheetBytes, 8), "the shipped glyph sheet is a PNG");
+            assertTrue(((sheetBytes[16] & 0xFF) << 24 | (sheetBytes[17] & 0xFF) << 16
+                    | (sheetBytes[18] & 0xFF) << 8 | (sheetBytes[19] & 0xFF)) > 0, "PNG width");
+            assertTrue(((sheetBytes[20] & 0xFF) << 24 | (sheetBytes[21] & 0xFF) << 16
+                    | (sheetBytes[22] & 0xFF) << 8 | (sheetBytes[23] & 0xFF)) > 0, "PNG height");
+        } else {
+            assertEquals("GIF89a", new String(sheetBytes, 0, 6, StandardCharsets.ISO_8859_1),
+                    "the shipped glyph sheet is a GIF");
+            assertTrue(((sheetBytes[6] & 0xFF) | ((sheetBytes[7] & 0xFF) << 8)) > 0, "GIF width");
+            assertTrue(((sheetBytes[8] & 0xFF) | ((sheetBytes[9] & 0xFF) << 8)) > 0, "GIF height");
+        }
 
         FontData fd = new FontData();
         Set<String> needsApp = Set.of("LayerSetImage", "LayerSetImageMap");
@@ -258,7 +280,9 @@ class ImageFontTest {
             fd.parseDescriptorLine(trimmed);
         }
 
-        assertEquals(14, fd.mDefaultPointSize, "ContinuumBold14 declares point size 14");
+        // The variants size the font differently: the English descriptor declares 14, the Chinese
+        // GOTY one re-declares 12 (SetDefaultPointSize / LayerSetPointSize Main 12).
+        assertEquals(chinese ? 12 : 14, fd.mDefaultPointSize, "ContinuumBold14 declares its point size");
         FontLayer layer = fd.mFontLayerMap.get("MAIN");
         assertTrue(layer != null, "descriptor declares a Main layer");
         assertTrue(layer.getCharData('A').mWidth > 0, "glyph 'A' must have a measured width");

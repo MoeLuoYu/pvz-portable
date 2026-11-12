@@ -49,6 +49,11 @@ class ResourcesTableTest {
     private static final int EXPECTED_FONTS = 20;
     private static final String[] IMAGE_EXTENSIONS = {".png", ".jpg", ".gif", ".tga"};
 
+    /** The engine decodes sounds by content (WAV/Ogg/MO3/AU) and the retail variants rename
+     *  containers — the English retail keeps diamond.ogg where the Chinese GOTY ships diamond.au —
+     *  so a sound resolves when the pak holds the name under any of these. */
+    private static final String[] SOUND_EXTENSIONS = {".ogg", ".au", ".mo3", ".wav"};
+
     /** Every {@code *_ID} constant must be mapped exactly once and agree with the table. */
     @Test
     void constantsAreUniqueAndFullyMapped() {
@@ -292,7 +297,7 @@ class ResourcesTableTest {
         }
         switch (entry.type) {
             case SOUND -> {
-                return exists(pakInterface, withExtension(path, ".ogg"));
+                return existsWithAnyExtension(pakInterface, path, SOUND_EXTENSIONS);
             }
             case FONT -> {
                 return exists(pakInterface, hasExtension(path) ? path : path + ".txt");
@@ -349,8 +354,18 @@ class ResourcesTableTest {
         return false;
     }
 
-    private static String withExtension(String path, String extension) {
-        return path.toLowerCase(Locale.ROOT).endsWith(extension) ? path : path + extension;
+    /** True when the pak holds the path as-is (already extended) or under any of the extensions. */
+    private static boolean existsWithAnyExtension(PakInterface pakInterface, String path,
+            String[] extensions) throws IOException {
+        if (hasExtension(path)) {
+            return exists(pakInterface, path);
+        }
+        for (String extension : extensions) {
+            if (exists(pakInterface, path + extension)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static String stripTrailingSlash(String path) {
