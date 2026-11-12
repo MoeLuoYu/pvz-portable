@@ -2,6 +2,7 @@ package cn.enaium.fabricpvz.portable.lawn.system;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -33,6 +34,11 @@ class MusicTest {
     record PlayCall(int songId, int offset, boolean noLoop) {
     }
 
+    /** The atomic gated start: one call carrying the stream start, the starting volume and the
+     *  per-channel gates ({@code null} when the song carries no channel layout). */
+    record GatedCall(int songId, int offset, boolean noLoop, double volume, double[] gates) {
+    }
+
     record VolumeCall(int songId, double volume) {
     }
 
@@ -43,6 +49,7 @@ class MusicTest {
         final List<PlayCall> playCalls = new ArrayList<>();
         final List<VolumeCall> volumeCalls = new ArrayList<>();
         final List<ChannelCall> channelCalls = new ArrayList<>();
+        final List<GatedCall> gatedCalls = new ArrayList<>();
         final List<Integer> stopMusicCalls = new ArrayList<>();
 
         /** Returned by {@link #getMusicOrder(int)}; set by the burst tests. */
@@ -56,6 +63,20 @@ class MusicTest {
         @Override
         public void playMusic(int theSongId, int theOffset, boolean noLoop) {
             playCalls.add(new PlayCall(theSongId, theOffset, noLoop));
+        }
+
+        @Override
+        public void playMusicGated(int theSongId, int theOffset, boolean noLoop, double theVolume,
+                double[] theChannelVolumes) {
+            gatedCalls.add(new GatedCall(theSongId, theOffset, noLoop, theVolume,
+                    theChannelVolumes == null ? null : theChannelVolumes.clone()));
+            playMusic(theSongId, theOffset, noLoop);
+            setSongVolume(theSongId, theVolume);
+            if (theChannelVolumes != null) {
+                for (int aTrack = 0; aTrack < theChannelVolumes.length; aTrack++) {
+                    setChannelVolume(theSongId, aTrack, theChannelVolumes[aTrack]);
+                }
+            }
         }
 
         @Override
@@ -221,6 +242,37 @@ class MusicTest {
         assertEquals(2, iface.playCalls.size());
         assertEquals(new PlayCall(MusicFile.MUSIC_FILE_MAIN_MUSIC, 0x30, false), iface.playCalls.get(0));
         assertEquals(new PlayCall(MusicFile.MUSIC_FILE_DRUMS, 0x5C, false), iface.playCalls.get(1));
+    }
+
+    /** Regression for the drum-leak at level start: the tune's channel gating must ride the SAME
+     *  gated start as the stream (the feeder renders the first buffer the moment a plain
+     *  playMusic returns, so gates applied afterwards leaked the drum channels into the first
+     *  ~100ms). The main stream carries the 30-channel table — main stems full, drums/hihats
+     *  silent — and the drums stream is gated by its 0.0 song volume with no channel table. */
+    @Test
+    void playFromOffsetGatesTheChannelsInsideTheGatedStart() {
+        RecordingMusicInterface iface = new RecordingMusicInterface();
+        Music music = newMusic(iface);
+        music.playMusic(MusicTune.MUSIC_TUNE_NIGHT_MOONGRAINS, -1, -1);
+
+        assertEquals(2, iface.gatedCalls.size());
+        GatedCall aMain = iface.gatedCalls.get(0);
+        assertEquals(MusicFile.MUSIC_FILE_MAIN_MUSIC, aMain.songId());
+        assertEquals(0x30, aMain.offset());
+        assertEquals(1.0, aMain.volume());
+        // Moongrains has no entry in the channel table (default: all 30 tracks main) — its drums
+        // live in the separate drums stream, gated below by that stream's 0.0 song volume. The
+        // tunes WITH a table (Grasswalk etc.) gate their drum/hihat channels through the same call.
+        assertEquals(30, aMain.gates().length);
+        for (int aTrack = 0; aTrack < 30; aTrack++) {
+            assertEquals(128.0, aMain.gates()[aTrack], "track " + aTrack + " (no table for Moongrains)");
+        }
+
+        GatedCall aDrums = iface.gatedCalls.get(1);
+        assertEquals(MusicFile.MUSIC_FILE_DRUMS, aDrums.songId());
+        assertEquals(0x5C, aDrums.offset());
+        assertEquals(0.0, aDrums.volume());
+        assertNull(aDrums.gates(), "the drums stream carries no channel layout");
     }
 
     @Test

@@ -326,7 +326,7 @@ tasks.register<Sync>("testModsJar") {
 // (`pvz.test.modsDir` - a real mods/ directory, because the test class path carries no API), the
 // release zip the distribution test asserts (`pvz.test.distribution`), and the headless-ish SDL
 // drivers: `pvzTestConventions` in buildSrc.
-pvzTestConventions(testModsDir)
+pvzTestConventions(testModsDir, layout.projectDirectory.dir("run"))
 
 // ------------------------------------------------------------------------------------------------
 // Development tasks

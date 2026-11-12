@@ -425,6 +425,35 @@ public final class OpenAlMusicInterface implements MusicInterface, AutoCloseable
         }
     }
 
+    /**
+     * The atomic {@link MusicInterface#playMusicGated}: channel gating, the play state and the
+     * starting volume all land inside the same mutex hold the feeder obeys, so its first render
+     * for this song sees the gates. Volume order mirrors {@code Music::PlayFromOffset}: play
+     * resets {@code mVolume} to the cap, the caller's volume wins after it.
+     */
+    @Override
+    public void playMusicGated(int theSongId, int theOffset, boolean noLoop, double theVolume,
+            double[] theChannelVolumes) {
+        synchronized (mMusicMapMutex) {
+            Song song = mMusicMap.get(theSongId);
+            if (song == null) {
+                return;
+            }
+            if (theChannelVolumes != null) {
+                for (int aTrack = 0; aTrack < theChannelVolumes.length; aTrack++) {
+                    song.stream.setChannelVolume(aTrack, theChannelVolumes[aTrack]);
+                }
+            }
+            song.info.mVolume = song.info.mVolumeCap;
+            song.info.mVolumeAdd = 0.0;
+            song.info.mStopOnFade = noLoop;
+            haltStream(song);
+            startStream(song, theOffset, !noLoop);
+            song.info.mVolume = theVolume;
+            applyGain(song);
+        }
+    }
+
     /** Closes the feeder thread and unloads every song. */
     @Override
     public void close() {

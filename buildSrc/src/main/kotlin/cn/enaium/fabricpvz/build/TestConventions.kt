@@ -24,7 +24,7 @@ import org.gradle.api.tasks.testing.logging.TestExceptionFormat
  *  * **SDL's dummy video and audio drivers**: the tests run headless-ish, and sounds that never
  *    finish would stall the cutscenes that wait for them.
  */
-fun Project.pvzTestConventions(modsDir: Provider<Directory>) {
+fun Project.pvzTestConventions(modsDir: Provider<Directory>, runDir: Directory) {
     // Both are read lazily, when the test task's command line is built - i.e. after `distZip` has
     // run - so that merely listing or configuring the test task does not query `distZip`'s output.
     val distribution = tasks.named("distZip", Zip::class.java)
@@ -45,6 +45,12 @@ fun Project.pvzTestConventions(modsDir: Provider<Directory>) {
         }
         dependsOn(tasks.named("testModsJar"))
         systemProperty("pvz.test.modsDir", modsDir.get().asFile.absolutePath)
+        // The MO3 tests load libopenmpt the way a run does: the natives are staged into the dev
+        // run directory (`run/lib/native/<os>-<arch>/`) and the game-directory property points the
+        // library probe at it. Without this the MO3 tests silently skip on every machine that has
+        // no system-wide libopenmpt - the suite would never exercise its own MO3 coverage.
+        dependsOn(tasks.named("libopenmptRunNatives"))
+        systemProperty("pvz.gameDir", runDir.asFile.absolutePath)
         // The real-asset tests' own `-Dpvz.test.resources`, forwarded from a Gradle property so a
         // run can pin the asset root (`-Ppvz.test.resources=<dir>`) independently of what the
         // discovery chain finds — including suppressing it: an invalid directory (say, an empty

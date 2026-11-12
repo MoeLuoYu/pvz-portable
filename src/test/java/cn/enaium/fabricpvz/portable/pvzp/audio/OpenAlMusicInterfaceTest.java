@@ -201,4 +201,41 @@ class OpenAlMusicInterfaceTest {
             }
         }
     }
+
+    /** The gated start arms the stream, the starting volume and the channel gates inside one
+     *  transaction: after it returns, the song plays at the caller's volume (not the play reset's
+     *  cap) and reports the requested order. */
+    @Test
+    void gatedStartArmsVolumeAndChannelsInOneTransaction() throws IOException {
+        Optional<Path> root = TestAssets.resourceRoot();
+        Assumptions.assumeTrue(root.isPresent(), "no real PvZ assets available");
+        Optional<Path> pakPath = TestAssets.resolve("main.pak");
+        Assumptions.assumeTrue(pakPath.isPresent(), "no main.pak in the resource root");
+        Assumptions.assumeTrue(Mo3Decoder.isAvailable(), "libopenmpt not available");
+
+        PakInterface pak = new PakInterface();
+        pak.setResourceFolder(root.get().toString());
+        assertTrue(pak.addPakFile(pakPath.get()));
+
+        try (OpenAlDevice device = new OpenAlDevice()) {
+            Assumptions.assumeTrue(device.available(), "no audio device available");
+
+            try (OpenAlMusicInterface music = new OpenAlMusicInterface(pak, device)) {
+                int song = 4;
+                assertTrue(music.loadMusic(song, "sounds/mainmusic.mo3"));
+
+                // Music::PlayFromOffset(MUSIC_FILE_MAIN_MUSIC, 0x30, 1.0) with the Moongrains-style
+                // gating (track 0 full, everything else silent) — but at half song volume.
+                double[] aGates = new double[30];
+                aGates[0] = 128.0;
+                music.playMusicGated(song, 0x30, false, 0.5, aGates);
+
+                assertTrue(music.isPlaying(song));
+                assertEquals(0.5f, music.sourceGain(song), 1e-6);
+                assertEquals(0x30, music.getMusicOrder(song) & 0xFFFF);
+
+                music.stopMusic(song);
+            }
+        }
+    }
 }

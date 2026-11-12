@@ -101,4 +101,31 @@ public interface MusicInterface {
      */
     default void setChannelVolume(int theSongId, int theTrack, double theVolume) {
     }
+
+    /**
+     * Arms a stream with its starting volume and per-channel gating in ONE transaction: a backend
+     * that renders the first buffer as soon as the stream is armed cannot produce it before every
+     * gate is in place.
+     *
+     * <p>Not upstream: SDL_mixer renders lazily on its audio callback, so the game's own
+     * play-then-gate order could not leak audio into the first buffer. This port's music feeder
+     * renders on the wake-up after {@link #playMusic}, so the drum/hihat channel gating arriving
+     * in a separate call let the module's drum channels leak into the first ~100ms of every tune
+     * that carries them.
+     *
+     * <p>The default composes the plain operations non-atomically (the fallback a stub needs);
+     * a real backend overrides it under its own lock. {@code theChannelVolumes} (indexed by
+     * tracker channel, {@code MIX_MAX_VOLUME} units like {@link #setChannelVolume}) may be
+     * {@code null} when the song carries no channel layout to gate.
+     */
+    default void playMusicGated(int theSongId, int theOffset, boolean noLoop, double theVolume,
+            double[] theChannelVolumes) {
+        playMusic(theSongId, theOffset, noLoop);
+        setSongVolume(theSongId, theVolume);
+        if (theChannelVolumes != null) {
+            for (int aTrack = 0; aTrack < theChannelVolumes.length; aTrack++) {
+                setChannelVolume(theSongId, aTrack, theChannelVolumes[aTrack]);
+            }
+        }
+    }
 }

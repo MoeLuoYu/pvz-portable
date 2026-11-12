@@ -283,8 +283,15 @@ public class Music {
      */
     public void playFromOffset(int theMusicFile, int theOffset, double theVolume) {
         boolean aNoLoop = theMusicFile == MusicFile.MUSIC_FILE_CREDITS_ZOMBIES_ON_YOUR_LAWN;
-        mMusicInterface.playMusic(theMusicFile, theOffset, aNoLoop);
-        mMusicInterface.setSongVolume(theMusicFile, theVolume);
+        // PORT-NOTE: the channel gating rides the same transaction as the start. The music feeder
+        // renders its first buffer (~100ms) the moment playMusic releases the mutex, so gating
+        // applied in a separate section let the module's drum/hihat channels leak into the first
+        // buffer of every tune that carries them - the audible drum hit at each level start.
+        // Only the main file carries the tune's channel layout; the drums file is gated by its
+        // song volume (0.0 for Moongrains) inside the same call.
+        double[] aChannelGates = theMusicFile == MusicFile.MUSIC_FILE_MAIN_MUSIC
+                ? computeChannelVolumes(mCurMusicTune, 0.0f, 0.0f) : null;
+        mMusicInterface.playMusicGated(theMusicFile, theOffset, aNoLoop, theVolume, aChannelGates);
         setupVolumeForTune(mCurMusicTune, 0.0f, 0.0f);
     }
 
@@ -455,6 +462,18 @@ public class Music {
      * backend as {@code (int)(volume * 128)} (Music.cpp:171).
      */
     public void setupVolumeForTune(int theMusicTune, float theDrumsVolume, float theHihatsVolume) {
+        double[] aVolumes = computeChannelVolumes(theMusicTune, theDrumsVolume, theHihatsVolume);
+        for (int aTrack = 0; aTrack < aVolumes.length; aTrack++) {
+            mMusicInterface.setChannelVolume(MusicFile.MUSIC_FILE_MAIN_MUSIC, aTrack, aVolumes[aTrack]);
+        }
+    }
+
+    /**
+     * The per-track volume table {@code setupVolumeForTune} applies (tracker channels of
+     * {@code mainmusic.mo3}, {@code MIX_MAX_VOLUME} units), computed without touching the
+     * interface so {@link #playFromOffset} can hand it to the atomic gated start.
+     */
+    static double[] computeChannelVolumes(int theMusicTune, float theDrumsVolume, float theHihatsVolume) {
         final int TRACK_COUNT = 30;
         int aMainEnd = 29;
         int aDrumsStart = -1, aDrumsEnd = -1;
@@ -485,6 +504,7 @@ public class Music {
                 break;
         }
 
+        double[] aVolumes = new double[TRACK_COUNT];
         for (int aTrack = 0; aTrack < TRACK_COUNT; aTrack++) {
             float aVolume;
             if (aTrack <= aMainEnd) {
@@ -503,8 +523,9 @@ public class Music {
                     aVolume = 0.0f;
                 }
             }
-            mMusicInterface.setChannelVolume(MusicFile.MUSIC_FILE_MAIN_MUSIC, aTrack, (int) (aVolume * 128));
+            aVolumes[aTrack] = (int) (aVolume * 128);
         }
+        return aVolumes;
     }
 
     // ------------------------------------------------------------------------------------------
