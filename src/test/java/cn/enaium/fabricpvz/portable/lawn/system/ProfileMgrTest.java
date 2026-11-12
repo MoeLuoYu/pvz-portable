@@ -428,6 +428,24 @@ class ProfileMgrTest {
         assertArrayEquals(goldenUsersFile(), aWritten);
     }
 
+    /** Regression for the users.dat string codec: it used to write strings through ISO_8859_1,
+     *  which replaced every CJK character with '?' at write time — a Chinese profile name came
+     *  back as a row of question marks. Upstream writes its std::string's raw bytes with the
+     *  project's UTF-8 convention (DataSync.cpp:394-399), and the port now does too. */
+    @Test
+    void chineseProfileNameRoundTripsThroughUsersDat() throws IOException {
+        ProfileMgr aMgr = new ProfileMgr();
+        aMgr.addProfile("小明");
+        aMgr.save();
+
+        ProfileMgr aReloaded = new ProfileMgr();
+        aReloaded.load();
+        PlayerInfo aProfile = aReloaded.getProfile("小明");
+        assertNotNull(aProfile, "the Chinese profile name must survive the users.dat round trip");
+        assertEquals("小明", aProfile.mName);
+        assertEquals(aMgr.getProfile("小明").mId, aProfile.mId);
+    }
+
     @Test
     void loadsUpstreamLayoutUsersDat() throws IOException {
         Path aDir = mTempDir.resolve("userdata");

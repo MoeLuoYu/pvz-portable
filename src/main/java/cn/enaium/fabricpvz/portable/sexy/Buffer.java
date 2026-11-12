@@ -350,7 +350,10 @@ public class Buffer {
 
     // WriteString
     public void writeString(String theString) {
-        byte[] aBytes = theString.getBytes(StandardCharsets.ISO_8859_1);
+        // PORT-NOTE: UTF-8, mirroring upstream's raw std::string bytes (content convention UTF-8);
+        // ISO_8859_1 replaced every CJK character with '?' at write time. The demo buffers these
+        // feed are written and read by the same build, so the codec change is self-consistent.
+        byte[] aBytes = theString.getBytes(StandardCharsets.UTF_8);
         writeShort((short) aBytes.length);
         for (int i = 0; i < aBytes.length; i++) {
             writeByte(aBytes[i]);
@@ -359,7 +362,8 @@ public class Buffer {
 
     // WriteLine
     public void writeLine(String theString) {
-        byte[] aBytes = (theString + "\r\n").getBytes(StandardCharsets.ISO_8859_1);
+        // PORT-NOTE: UTF-8 like writeString above.
+        byte[] aBytes = (theString + "\r\n").getBytes(StandardCharsets.UTF_8);
         writeBytes(aBytes, aBytes.length);
     }
 
@@ -484,7 +488,8 @@ public class Buffer {
             aBytes[i] = readByte();
         }
 
-        return new String(aBytes, StandardCharsets.ISO_8859_1);
+        // PORT-NOTE: decoded as UTF-8 to mirror Buffer.writeString.
+        return new String(aBytes, StandardCharsets.UTF_8);
     }
 
     // ReadLine

@@ -162,10 +162,12 @@ public class DataReader implements AutoCloseable {
 
     /** Ported from DataSync.cpp:160-166. {@code uint16} byte length then raw bytes. */
     public String readString() {
+        // PORT-NOTE: decoded as UTF-8 to mirror DataWriter.writeString — upstream reads its
+        // std::string's raw bytes, whose content convention is UTF-8.
         int aStrLen = readUInt16();
         byte[] aBytes = new byte[aStrLen];
         readBytes(aBytes);
-        return new String(aBytes, StandardCharsets.ISO_8859_1);
+        return new String(aBytes, StandardCharsets.UTF_8);
     }
 
     /** Current cursor position (memory buffer only; mirrors upstream {@code mDataPos}). */

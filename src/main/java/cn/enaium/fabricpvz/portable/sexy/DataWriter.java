@@ -142,7 +142,11 @@ public class DataWriter {
 
     /** Ported from DataSync.cpp:528-533. {@code uint16} byte length then raw bytes. */
     public void writeString(String theStr) {
-        byte[] aBytes = theStr.getBytes(StandardCharsets.ISO_8859_1);
+        // PORT-NOTE: upstream writes the raw bytes of its std::string, whose content convention is
+        // UTF-8 (upstream DataWriter::WriteString, DataSync.cpp:394-399). ISO_8859_1 — the byte
+        // image of the Latin-1 range only — replaced every CJK character with '?' at WRITE time,
+        // so a Chinese profile name was saved as a row of question marks in users.dat.
+        byte[] aBytes = theStr.getBytes(StandardCharsets.UTF_8);
         int aStrLen = Math.min(aBytes.length, 0xFFFF);
         writeUInt16(aStrLen);
         writeBytes(aBytes, 0, aStrLen);

@@ -600,6 +600,52 @@ val installMcMods = tasks.register<Copy>("installMcMods") {
 /** What a reinstall of the version folder keeps: the saves, the mods and the assets the player placed. */
 val REINSTALL_KEEP = listOf("savedata", "mods", "main.pak", "properties")
 
+// Where a reinstall parks the keep between the move-aside and the move-back. A fixed path (not the
+// task's temporaryDir) because it must survive a FAILED run: the keep holds the player's saves and
+// assets, and the restore has to be able to pick it up no matter how the previous run ended.
+val reinstallKeepDir = layout.buildDirectory.dir("tmp/reinstall-keep")
+
+/** Moves whatever the keep dir holds back under the version folder. Idempotent: a no-op when the
+ *  keep is absent (every restore deletes it), safe when the target already exists. */
+fun restoreReinstallKeep() {
+    val keep = reinstallKeepDir.get().asFile
+    if (!keep.isDirectory) {
+        return
+    }
+    val folder = File(mcVersionsDir, mcVersionId)
+    folder.mkdirs()
+    for (name in REINSTALL_KEEP) {
+        val kept = File(keep, name)
+        if (kept.exists()) {
+            val target = File(folder, name)
+            when {
+                // The version folder already has this entry (the game recreated it while a failed
+                // run's keep was parked): merge the keep over it rather than discarding it.
+                target.isDirectory && kept.isDirectory ->
+                    kept.copyRecursively(target, overwrite = true)
+                // A rename inside one drive just moves it; the copy is the fallback for a
+                // cross-device target.
+                !target.exists() && kept.renameTo(target) -> {}
+                else ->
+                    if (kept.isDirectory) {
+                        kept.copyRecursively(target, overwrite = true)
+                    } else {
+                        kept.copyTo(target, overwrite = true)
+                    }
+            }
+        }
+    }
+    keep.deleteRecursively()
+}
+
+val restoreReinstallKeepTask = tasks.register("restoreReinstallKeep") {
+    group = "distribution"
+    description = "Moves the reinstall keep (saves/mods/assets) back under the version folder."
+    doLast {
+        restoreReinstallKeep()
+    }
+}
+
 val installMcVersion = tasks.register<Copy>("installMcVersion") {
     group = "distribution"
     description = "Installs the Minecraft-style version into -PmcGameDir (default: the macOS install)."
@@ -610,19 +656,25 @@ val installMcVersion = tasks.register<Copy>("installMcVersion") {
     // id, so it never collides with one of vanilla's.
     val assetIndex = PvzAssetIndex.inGameDir(File(mcGameDir), project.version.toString())
     outputs.file(assetIndex)
+    // The restore runs no matter how this task ends: a copy that fails halfway (the game running,
+    // a locked library) must never orphan the keep — it holds the player's saves and assets.
+    finalizedBy(restoreReinstallKeepTask)
     doFirst {
         // The version folder is replaced as a whole, so a stale library or an old jar cannot
-        // survive - except of what the game and the player put there: the saves, the mods and the
-        // game assets the player placed (`main.pak`, a loose `properties/`) are moved aside here
-        // and moved back after the copy (the zip carries none of them).
+        // survive - except of what the game and the player put there: the saves, the mods and
+        // the game assets the player placed (`main.pak`, a loose `properties/`) are moved aside
+        // here and the finalizer moves them back (the zip carries none of them). A keep that is
+        // already here belongs to a run that died before its restore could run: it is put back
+        // FIRST, never deleted - deleting it took a player's saves with it once.
+        restoreReinstallKeep()
         val folder = File(mcVersionsDir, mcVersionId)
-        val keep = File(temporaryDir, "reinstall-keep")
-        keep.deleteRecursively()
+        val keep = reinstallKeepDir.get().asFile
         if (folder.isDirectory) {
             for (name in REINSTALL_KEEP) {
                 val source = File(folder, name)
                 if (source.exists()) {
                     val kept = File(keep, name)
+                    kept.parentFile.mkdirs()
                     if (!source.renameTo(kept)) {
                         if (source.isDirectory) {
                             source.copyRecursively(kept, overwrite = true)
@@ -637,24 +689,6 @@ val installMcVersion = tasks.register<Copy>("installMcVersion") {
     }
     doLast {
         PvzAssetIndex.install(File(mcGameDir), project.version.toString())
-        // What was set aside above goes back under the fresh version folder; a rename inside one
-        // drive just moves it, the copy is the fallback for a cross-device target.
-        val folder = File(mcVersionsDir, mcVersionId)
-        val keep = File(temporaryDir, "reinstall-keep")
-        for (name in REINSTALL_KEEP) {
-            val kept = File(keep, name)
-            if (kept.exists()) {
-                val target = File(folder, name)
-                if (!target.exists() && !kept.renameTo(target)) {
-                    if (kept.isDirectory) {
-                        kept.copyRecursively(target, overwrite = true)
-                    } else {
-                        kept.copyTo(target, overwrite = true)
-                    }
-                }
-            }
-        }
-        keep.deleteRecursively()
         logger.lifecycle(
             "installMcVersion: {} installed into {} (mods from {}, empty asset index {})",
             mcVersionId, mcVersionsDir, mcModsDir, assetIndex,

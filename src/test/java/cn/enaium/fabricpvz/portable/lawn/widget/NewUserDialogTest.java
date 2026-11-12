@@ -101,6 +101,25 @@ class NewUserDialogTest {
         assertEquals("Alice", aDialog.mNameEditWidget.mString);
     }
 
+    /** Profile names keep the letters as typed: the name field opts out of upstream's first-letter
+     *  auto-capitalisation (LawnCommon.cpp AutoCapChar — the reason original-game profile names all
+     *  start with a capital). See the PORT-NOTE in NewUserDialog. */
+    @Test
+    void nameFieldKeepsLowercaseLettersAsTyped() {
+        // IME-style commits (SDL text-input -> WidgetManager.keyText): no auto-capitalisation.
+        LawnApp app = newApp();
+        NewUserDialog aDialog = newTypableDialog(app);
+        app.mWidgetManager.keyText("alice");
+        assertEquals("alice", aDialog.mNameEditWidget.mString, "lowercase must not be capitalised");
+
+        // Per-keystroke input (SDL key events -> keyChar): same rule.
+        NewUserDialog bDialog = newTypableDialog(newApp());
+        for (char c : "aLiCe".toCharArray()) {
+            bDialog.mNameEditWidget.keyChar(c);
+        }
+        assertEquals("aLiCe", bDialog.mNameEditWidget.mString);
+    }
+
     @Test
     void typingStopsAtTheCharacterLimit() {
         LawnApp app = newApp();

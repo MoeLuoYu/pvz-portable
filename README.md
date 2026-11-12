@@ -289,6 +289,8 @@ gh release create "$VERSION" "build/distributions/pvz-portable-$VERSION.zip" \
 | 重新开始按钮 | 按钮标签用 `[RESTART_LEVEL]`（`ContinueDialog.cpp` / `NewOptionsDialog.cpp`） | 两处按钮（"继续游戏？"对话框与关卡内选项菜单）改用 `[RESTART_BUTTON]` | 零售字符串表里 `RESTART_LEVEL` 的值是一句确认问话（"你确定想要重新开始这一关卡吗？"）而非按钮文本，按钮文本在 `RESTART_BUTTON`（"重新开始"）下；照抄上游会让按钮显示整句问话 |
 | 存档中的字幕文本 | 关卡存档按原始字节同步字幕标签（`SaveGame.cpp:690-701`，英文零售版里即 ASCII） | 字幕标签的定长缓冲改用 UTF-8 编解码（`SaveGame.syncFixedString`） | 本移植版运行在本地化零售资源上，字幕标签是中文文本；ISO_8859_1 之类"逐字节原样"编解码会在**写入时**把每个汉字替换成 `?`（0x3F），于是"提示期间保存退出再进入"后字幕显示为一排问号。改用 UTF-8 后标签原样往返；仅影响 `MessageWidget` 的两个标签缓冲 |
 | 编译缓存键 | 缓存路径按传入的 XML 路径原样拼接（`Definition.cpp:560-569`；游戏自身只传资源相对名） | 缓存键经 `CompiledCache.normalizeCacheKey` 归一（折叠分隔符、剥资源根/盘符前缀；相对名原样不动） | 上游在 POSIX 下把绝对路径拼进相对缓存目录得到的是合法（虽然怪异的）文件名，Windows 上盘符冒号会让编译缓存直接抛 `InvalidPathException`——测试夹具与散文件场景会传入绝对路径。键只需稳定且合法，读写两侧经同一方法保持对称 |
+| 档案与演示文件的字符串编码 | `DataWriter::WriteString` 写 `std::string` 的原始字节（上游内容约定为 UTF-8，`DataSync.cpp:394-399`） | `DataWriter.writeString`/`DataReader.readString`/`Buffer` 的字符串编解码改用 UTF-8 | 移植版此前用 ISO_8859_1——ASCII 时与上游碰巧一致，任何 CJK 字符却在**写入时**就被替换成 `?`（0x3F）：中文玩家名在 `users.dat` 里存成一排问号，与字幕编码是同一族缺陷。UTF-8 与上游逐字节对齐；演示录制（demo）缓冲由同一构建写读，编解码切换自洽 |
+| 档案名的首字母大写 | 名字输入控件自动大写第一个键入的字母（`LawnCommon.cpp` 的 AutoCapChar——原版档案名都因此大写开头） | 新建档案对话框的名字字段关闭自动大写，名字完全按所打内容保存（`NewUserDialog`） | 用户要求档案名原样保留小写字母；秘籍输入等其他 `LawnEditWidget` 用途保持上游行为 |
 
 ## 开发任务
 

@@ -9,6 +9,7 @@ package cn.enaium.fabricpvz.portable.lawn.widget;
 import cn.enaium.fabricpvz.portable.lawn.Dialogs;
 import cn.enaium.fabricpvz.portable.lawn.LawnApp;
 import cn.enaium.fabricpvz.portable.lawn.LawnCommon;
+import cn.enaium.fabricpvz.portable.lawn.LawnEditWidget;
 import cn.enaium.fabricpvz.portable.sexy.Dialog;
 import cn.enaium.fabricpvz.portable.sexy.EditListener;
 import cn.enaium.fabricpvz.portable.sexy.EditWidget;
@@ -36,7 +37,14 @@ public class NewUserDialog extends LawnDialog implements EditListener {
 
         mApp = theApp;
         mVerticalCenterText = false;
-        mNameEditWidget = LawnCommon.createEditWidget(0, this, this);
+        LawnEditWidget aNameEditWidget = LawnCommon.createEditWidget(0, this, this);
+        // PORT-NOTE: deviation from upstream — upstream's LawnEditWidget auto-capitalises the
+        // first typed letter (LawnCommon.cpp AutoCapChar), which is why original-game profile
+        // names all start with a capital. The user asked for profile names to keep lowercase
+        // letters as typed, so the name field opts out; the cheat dialog keeps upstream's
+        // behaviour.
+        aNameEditWidget.mAutoCapFirstLetter = false;
+        mNameEditWidget = aNameEditWidget;
         mNameEditWidget.mMaxChars = 12;
         mNameEditWidget.addWidthCheckFont(
                 cn.enaium.fabricpvz.portable.lawn.Resources.getFontById(cn.enaium.fabricpvz.portable.lawn.Resources.FONT_BRIANNETOD16_ID), 220);
