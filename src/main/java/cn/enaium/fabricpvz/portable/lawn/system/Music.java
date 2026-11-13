@@ -283,12 +283,14 @@ public class Music {
      */
     public void playFromOffset(int theMusicFile, int theOffset, double theVolume) {
         boolean aNoLoop = theMusicFile == MusicFile.MUSIC_FILE_CREDITS_ZOMBIES_ON_YOUR_LAWN;
-        // PORT-NOTE: the channel gating rides the same transaction as the start. The music feeder
-        // renders its first buffer (~100ms) the moment playMusic releases the mutex, so gating
-        // applied in a separate section let the module's drum/hihat channels leak into the first
-        // buffer of every tune that carries them - the audible drum hit at each level start.
-        // Only the main file carries the tune's channel layout; the drums file is gated by its
-        // song volume (0.0 for Moongrains) inside the same call.
+        // PORT-NOTE: the channel gating rides the same transaction as the start — and lands AFTER
+        // the position jump: the gates are libopenmpt's interactive channel volume (play-state
+        // Chn[].nGlobalVol), which the seek inside the gated call re-initializes. Gating before the
+        // seek let the feeder render the first buffer (~100ms) of every tune that carries
+        // drum/hihat channels with them at full volume - the audible drum hit at each level start
+        // and pause-resume restart. Only the main file carries the tune's channel layout; the
+        // drums file is gated by its song volume (0.0 for Moongrains) inside the same call. The
+        // trailing setupVolumeForTune re-asserts the table outside the lock (upstream parity).
         double[] aChannelGates = theMusicFile == MusicFile.MUSIC_FILE_MAIN_MUSIC
                 ? computeChannelVolumes(mCurMusicTune, 0.0f, 0.0f) : null;
         mMusicInterface.playMusicGated(theMusicFile, theOffset, aNoLoop, theVolume, aChannelGates);

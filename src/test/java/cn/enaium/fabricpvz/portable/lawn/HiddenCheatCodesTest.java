@@ -470,7 +470,7 @@ class HiddenCheatCodesTest {
                 app.mPlayerInfo.mPurchases[StoreItem.STORE_ITEM_BUG_SPRAY]);
         assertEquals(cn.enaium.fabricpvz.portable.lawn.system.PlayerInfo.PURCHASE_COUNT_OFFSET + 100,
                 app.mPlayerInfo.mPurchases[StoreItem.STORE_ITEM_CHOCOLATE]);
-        assertEquals(cn.enaium.fabricpvz.portable.lawn.system.PlayerInfo.PURCHASE_COUNT_OFFSET + 10,
+        assertEquals(cn.enaium.fabricpvz.portable.lawn.system.PlayerInfo.PURCHASE_COUNT_OFFSET + 100,
                 app.mPlayerInfo.mPurchases[StoreItem.STORE_ITEM_TREE_FOOD]);
         assertEquals(1, app.mPlayerInfo.mPurchases[StoreItem.STORE_ITEM_PLANT_GATLINGPEA]);
         assertEquals(1, app.mPlayerInfo.mPurchases[StoreItem.STORE_ITEM_POOL_CLEANER]);

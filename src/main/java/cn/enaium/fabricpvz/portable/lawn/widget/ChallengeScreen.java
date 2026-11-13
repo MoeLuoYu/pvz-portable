@@ -75,9 +75,9 @@ public class ChallengeScreen extends Widget implements ButtonListener {
     // ChallengeScreen.cpp:141-158 (page buttons)
     public static final int CHALLENGE_PAGE_BUTTON_X = 200;
     public static final int CHALLENGE_PAGE_BUTTON_PITCH = 100;
-    public static final int CHALLENGE_PAGE_BUTTON_Y = 540;
-    public static final int CHALLENGE_PAGE_BUTTON_WIDTH = 100;
-    public static final int CHALLENGE_PAGE_BUTTON_HEIGHT = 75;
+    public static final int CHALLENGE_PAGE_BUTTON_Y = 568;
+    public static final int CHALLENGE_PAGE_BUTTON_WIDTH = 111;
+    public static final int CHALLENGE_PAGE_BUTTON_HEIGHT = 26;
     // ChallengeScreen.cpp:129-139 (back button)
     public static final int CHALLENGE_BACK_BUTTON_X = 18;
     public static final int CHALLENGE_BACK_BUTTON_Y = 568;
@@ -272,22 +272,26 @@ public class ChallengeScreen extends Widget implements ButtonListener {
                 CHALLENGE_BACK_BUTTON_WIDTH, CHALLENGE_BACK_BUTTON_HEIGHT);
 
         for (int aPageIdx = ChallengePage.CHALLENGE_PAGE_SURVIVAL; aPageIdx < ChallengePage.MAX_CHALLANGE_PAGES; aPageIdx++) {
-            mPageButton[aPageIdx] = new ButtonWidget(ChallengeScreen_Page + aPageIdx, this);
-            ButtonWidget aPageButton = mPageButton[aPageIdx];
-            aPageButton.mDoFinger = true;
             // PORT-NOTE (deviation): upstream labels the limbo button from LIMBO_PAGE_BUTTON
             // ("状态页" in the retail table); the user asked for a numbered label instead, so both
-            // visible buttons carry [PAGE_X] — 第 1 页 (mini-games) / 第 2 页 (limbo).
-            aPageButton.mLabel = PvzpStringFile.translate("[PAGE_X]")
+            // visible buttons carry [PAGE_X] — 第 1 页 (mini-games) / 第 2 页 (limbo). The switcher
+            // wears the same button look as the [BACK_TO_MENU] button (the user asked for the
+            // highlight); the images are the chooser's button pair the back button uses too.
+            String aPageLabel = PvzpStringFile.translate("[PAGE_X]")
                     .replace("{PAGE}", Integer.toString(aPageIdx));
-            aPageButton.mButtonImage = Resources.getImageById(Resources.IMAGE_BLANK_ID);
-            aPageButton.mOverImage = Resources.getImageById(Resources.IMAGE_BLANK_ID);
-            aPageButton.mDownImage = Resources.getImageById(Resources.IMAGE_BLANK_ID);
-            aPageButton.setFont(Resources.getFontById(Resources.FONT_BRIANNETOD12_ID));
-            aPageButton.setLabelColor(new Color(255, 240, 0));
-            aPageButton.setLabelHiliteColor(new Color(220, 220, 0));
+            NewLawnButton aPageButton = GameButton.makeNewButton(ChallengeScreen_Page + aPageIdx, this,
+                    aPageLabel, null,
+                    Resources.getImageById(Resources.IMAGE_SEEDCHOOSER_BUTTON2_ID),
+                    Resources.getImageById(Resources.IMAGE_SEEDCHOOSER_BUTTON2_GLOW_ID),
+                    Resources.getImageById(Resources.IMAGE_SEEDCHOOSER_BUTTON2_GLOW_ID));
+            aPageButton.mDoFinger = true;
+            aPageButton.mTextDownOffsetX = 1;
+            aPageButton.mTextDownOffsetY = 1;
+            aPageButton.setLabelColor(new Color(42, 42, 90));
+            aPageButton.setLabelHiliteColor(new Color(42, 42, 90));
             aPageButton.resize(CHALLENGE_PAGE_BUTTON_X + CHALLENGE_PAGE_BUTTON_PITCH * aPageIdx,
                     CHALLENGE_PAGE_BUTTON_Y, CHALLENGE_PAGE_BUTTON_WIDTH, CHALLENGE_PAGE_BUTTON_HEIGHT);
+            mPageButton[aPageIdx] = aPageButton;
             if (!showPageButtons() || aPageIdx == ChallengePage.CHALLENGE_PAGE_SURVIVAL
                     || aPageIdx == ChallengePage.CHALLENGE_PAGE_PUZZLE) {
                 aPageButton.mVisible = false;
@@ -465,13 +469,25 @@ public class ChallengeScreen extends Widget implements ButtonListener {
             // PORT-NOTE (deviation): upstream revealed the limbo button only after the five-click
             // easter egg (ChallengeScreen.cpp:751-771 sets mLimboPageUnlocked); the switcher shows
             // on the mini-game and limbo pages unconditionally now, so the easter egg no longer
-            // gates anything (kept as upstream trace in mouseDown).
+            // gates anything (kept as upstream trace in mouseDown). Only the highlighted (clickable)
+            // switcher target wears the button frame: the current page's own button falls back to
+            // the frameless text look.
+            Image aFrame = Resources.getImageById(Resources.IMAGE_SEEDCHOOSER_BUTTON2_ID);
+            Image aGlow = Resources.getImageById(Resources.IMAGE_SEEDCHOOSER_BUTTON2_GLOW_ID);
             if (aPage == mPageIndex) {
-                aPageButton.setLabelColor(new Color(64, 64, 64));
+                // the current page wears the framed button as its highlight and is not clickable
+                aPageButton.setLabelColor(new Color(42, 42, 90));
                 aPageButton.mDisabled = true;
+                aPageButton.mButtonImage = aFrame;
+                aPageButton.mOverImage = aFrame;
+                aPageButton.mDownImage = aFrame;
             } else {
+                // the clickable jump target: frameless bright text, like the original switcher
                 aPageButton.setLabelColor(new Color(255, 240, 0));
                 aPageButton.mDisabled = false;
+                aPageButton.mButtonImage = Resources.getImageById(Resources.IMAGE_BLANK_ID);
+                aPageButton.mOverImage = Resources.getImageById(Resources.IMAGE_BLANK_ID);
+                aPageButton.mDownImage = Resources.getImageById(Resources.IMAGE_BLANK_ID);
             }
         }
     }

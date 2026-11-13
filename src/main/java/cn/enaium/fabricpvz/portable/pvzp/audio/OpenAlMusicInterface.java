@@ -426,10 +426,17 @@ public final class OpenAlMusicInterface implements MusicInterface, AutoCloseable
     }
 
     /**
-     * The atomic {@link MusicInterface#playMusicGated}: channel gating, the play state and the
-     * starting volume all land inside the same mutex hold the feeder obeys, so its first render
-     * for this song sees the gates. Volume order mirrors {@code Music::PlayFromOffset}: play
-     * resets {@code mVolume} to the cap, the caller's volume wins after it.
+     * The atomic {@link MusicInterface#playMusicGated}: the position jump, the channel gating, the
+     * play state and the starting volume all land inside the same mutex hold the feeder obeys, so
+     * its first render for this song sees the gates.
+     *
+     * <p>PORT-NOTE: the gates MUST be applied after {@code startStream}, not before — the gates are
+     * libopenmpt's interactive channel volume, which lives in the play state
+     * ({@code m_PlayState.Chn[].nGlobalVol}, see libopenmpt_ext_impl.cpp:179), and the position jump
+     * inside {@code startStream} re-initializes the live channels, wiping anything set before it.
+     * Gating before the seek leaked the first rendered buffer (~100 ms of drums) of every gated
+     * start. Volume order mirrors {@code Music::PlayFromOffset}: play resets {@code mVolume} to the
+     * cap, the caller's volume wins after it.
      */
     @Override
     public void playMusicGated(int theSongId, int theOffset, boolean noLoop, double theVolume,
@@ -439,16 +446,16 @@ public final class OpenAlMusicInterface implements MusicInterface, AutoCloseable
             if (song == null) {
                 return;
             }
-            if (theChannelVolumes != null) {
-                for (int aTrack = 0; aTrack < theChannelVolumes.length; aTrack++) {
-                    song.stream.setChannelVolume(aTrack, theChannelVolumes[aTrack]);
-                }
-            }
             song.info.mVolume = song.info.mVolumeCap;
             song.info.mVolumeAdd = 0.0;
             song.info.mStopOnFade = noLoop;
             haltStream(song);
             startStream(song, theOffset, !noLoop);
+            if (theChannelVolumes != null) {
+                for (int aTrack = 0; aTrack < theChannelVolumes.length; aTrack++) {
+                    song.stream.setChannelVolume(aTrack, theChannelVolumes[aTrack]);
+                }
+            }
             song.info.mVolume = theVolume;
             applyGain(song);
         }
@@ -549,6 +556,17 @@ public final class OpenAlMusicInterface implements MusicInterface, AutoCloseable
     /** {@code Mix_PlayingMusicStream}: true while the stream plays, false when paused/ended/unknown. */
     private boolean streamIsPlaying(Song song) {
         return song.startRequested && !song.paused && !song.ended;
+    }
+
+    /** The stream's interactive channel volume ([0, 1]), for tests; 0.0 when out of range. */
+    double channelVolume(int theSongId, int theTrack) {
+        synchronized (mMusicMapMutex) {
+            Song song = mMusicMap.get(theSongId);
+            if (song == null || !(song.stream instanceof Mo3Stream aStream)) {
+                return 0.0;
+            }
+            return aStream.getChannelVolume(theTrack);
+        }
     }
 
     /**

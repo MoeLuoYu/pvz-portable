@@ -225,14 +225,25 @@ class OpenAlMusicInterfaceTest {
                 assertTrue(music.loadMusic(song, "sounds/mainmusic.mo3"));
 
                 // Music::PlayFromOffset(MUSIC_FILE_MAIN_MUSIC, 0x30, 1.0) with the Moongrains-style
-                // gating (track 0 full, everything else silent) — but at half song volume.
+                // gating (track 0 silent, everything else full) — but at half song volume.
                 double[] aGates = new double[30];
-                aGates[0] = 128.0;
+                aGates[0] = 0.0;
+                for (int aTrack = 1; aTrack < aGates.length; aTrack++) {
+                    aGates[aTrack] = 128.0;
+                }
                 music.playMusicGated(song, 0x30, false, 0.5, aGates);
 
                 assertTrue(music.isPlaying(song));
                 assertEquals(0.5f, music.sourceGain(song), 1e-6);
                 assertEquals(0x30, music.getMusicOrder(song) & 0xFFFF);
+
+                // The gates must SURVIVE the position jump inside the gated call: they are
+                // libopenmpt's interactive channel volume, which the seek re-initializes — the
+                // first rendered buffer (~100 ms) leaked full-volume drums when the gates were
+                // applied before it (regression for the drum hit at every level start).
+                assertEquals(0.0, music.channelVolume(song, 0), 1e-6,
+                        "the gated channel must still be silent after the seek");
+                assertEquals(1.0, music.channelVolume(song, 1), 1e-6);
 
                 music.stopMusic(song);
             }

@@ -545,7 +545,7 @@ public class LawnApp extends SexyApp {
                     aPlayer.mPurchases[aItem] = PlayerInfo.PURCHASE_COUNT_OFFSET + 100;
                     break;
                 case StoreItem.STORE_ITEM_TREE_FOOD:
-                    aPlayer.mPurchases[aItem] = PlayerInfo.PURCHASE_COUNT_OFFSET + 10;
+                    aPlayer.mPurchases[aItem] = PlayerInfo.PURCHASE_COUNT_OFFSET + 100;
                     break;
                 case StoreItem.STORE_ITEM_PACKET_UPGRADE:
                     // the seed bank holds purchases + 6 slots (Board.cpp:~2356) — all four

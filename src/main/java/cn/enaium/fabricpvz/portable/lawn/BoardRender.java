@@ -15,6 +15,7 @@ package cn.enaium.fabricpvz.portable.lawn;
 import java.util.Arrays;
 import cn.enaium.fabricpvz.portable.lawn.hooks.LawnHooksRegistry;
 import cn.enaium.fabricpvz.portable.lawn.system.PlayerInfo;
+import cn.enaium.fabricpvz.portable.lawn.widget.ChallengeScreen;
 import cn.enaium.fabricpvz.portable.lawn.system.PottedPlant;
 import cn.enaium.fabricpvz.portable.pvzp.PvzpCommon;
 import cn.enaium.fabricpvz.portable.pvzp.PvzpStringFile;
@@ -762,7 +763,11 @@ final class BoardRender {
         if (b.mApp.isAdventureMode()) {
             aLevelStr = PvzpStringFile.translate("[LEVEL]") + " " + LawnApp.getStageString(b.mLevel);
         } else {
-            aLevelStr = b.mApp.getCurrentChallengeDef().mChallengeName;
+            // PORT-NOTE (deviation): the corner name resolves like the challenge select does
+            // (ChallengeScreen.resolveChallengeName) — defs carry bracketed keys or raw names
+            // ("Tree of Wisdom"), and the raw ones must find their [TREE_OF_WISDOM]-style
+            // LawnStrings entry instead of drawing the English text
+            aLevelStr = ChallengeScreen.resolveChallengeName(b.mApp.getCurrentChallengeDef().mChallengeName);
             if (b.mApp.isSurvivalMode() || b.mApp.mGameMode == GameMode.GAMEMODE_CHALLENGE_LAST_STAND) {
                 int aFlags = b.getSurvivalFlagsCompleted();
                 if (aFlags > 0) {

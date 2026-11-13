@@ -1174,6 +1174,7 @@ public class SexyAppBase implements ButtonListener, DialogListener {
     // SexyAppBase::DoMainLoop (SexyAppBase.cpp:2823)
     public void doMainLoop() {
         while (!mShutdown.get()) {
+            maybeReapplyWindowIcon();
             if (mExitToTop) {
                 mExitToTop = false;
             }
@@ -3112,6 +3113,34 @@ public class SexyAppBase implements ButtonListener, DialogListener {
      * complete flower in the title bar, the zombie hand in the taskbar). Silent when a resource is
      * absent.
      */
+    /**
+     * PORT-NOTE (deviation): the two-shot taskbar-icon re-apply (see maybeReapplyWindowIcon) —
+     * anchored to the first main-loop iteration, i.e. the moment the window becomes responsive
+     * after the loading freeze, which is exactly when explorer re-creates the taskbar task.
+     */
+    private int mWindowIconReappliesLeft = 2;
+    private long mWindowIconReapplyTick = Long.MAX_VALUE;
+    private boolean mMainLoopStarted;
+
+    private void maybeReapplyWindowIcon() {
+        if (mWindowIconReappliesLeft <= 0) {
+            return;
+        }
+        long aNow = ticks();
+        if (!mMainLoopStarted) {
+            // the first iteration is the recovery from the loading freeze; give explorer's
+            // taskbar-task re-creation a moment before the first re-apply
+            mMainLoopStarted = true;
+            mWindowIconReapplyTick = aNow + 500;
+        }
+        if (aNow < mWindowIconReapplyTick) {
+            return;
+        }
+        mWindowIconReappliesLeft--;
+        mWindowIconReapplyTick = aNow + 1000;
+        applyWindowIcon();
+    }
+
     private void applyWindowIcon() {
         try (InputStream in = SexyAppBase.class.getResourceAsStream("/pvzp/window-icon.png")) {
             if (in != null) {
@@ -4080,6 +4109,11 @@ public class SexyAppBase implements ButtonListener, DialogListener {
             case WINDOW_FOCUS_GAINED -> {
                 mActive = true;
                 rehupFocus();
+                // the taskbar button surely exists once the window is activated: fire the pending
+                // icon re-apply right away instead of waiting out its deadline
+                if (mMainLoopStarted) {
+                    mWindowIconReapplyTick = Math.min(mWindowIconReapplyTick, ticks());
+                }
             }
             case MOUSE_LEAVE -> {
                 // The pointer left the window: a press that started inside and ended outside never
