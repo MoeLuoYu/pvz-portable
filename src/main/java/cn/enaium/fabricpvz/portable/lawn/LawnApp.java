@@ -87,6 +87,12 @@ public class LawnApp extends SexyApp {
     /** Upstream {@code bool gFastMo}. */
     public static boolean gFastMo = false;
 
+    /**
+     * PORT-NOTE (deviation): the "fast" hidden cheat word's 2× game speed toggle, new to this port
+     * (upstream {@code gFastMo} runs 20 updates per frame, which is far beyond double speed).
+     */
+    public static boolean gCheatFastMo = false;
+
     /** Upstream {@code LawnApp* gLawnApp} (LawnApp.h:342). Assigned by the constructor. */
     public static LawnApp gLawnApp = null;
 
@@ -138,6 +144,11 @@ public class LawnApp extends SexyApp {
     public int mMaxTime;
     public boolean mEasyPlantingCheat;
     /**
+     * PORT-NOTE (deviation): the "lazyclick" hidden cheat word's auto-collect toggle, new to this
+     * port — when on, every sun, coin and pick-up on the board is collected without clicking.
+     */
+    public boolean mAutoCollectCheat;
+    /**
      * The auto-pause preference (a port addition; upstream always paused on focus loss,
      * LawnApp.cpp:299-311): when on, leaving the window pauses the board, when off the game keeps
      * running without focus. Toggled by the options dialog, persisted as the {@code AutoPause}
@@ -177,6 +188,25 @@ public class LawnApp extends SexyApp {
     public TypingCheck mDanceCheck;
     public TypingCheck mDaisyCheck;
     public TypingCheck mSukhbirCheck;
+    // PORT-NOTE (deviation): fifteen hidden cheat words new to this port
+    // (cheatplant/lazyclick/wingame/killzom/killplant/killall/cherryboom/fast/love/froze/
+    // retrack/dotrack/fillhoe/final/nextlevel), typed with the same TypingCheck machinery as the
+    // upstream words above.
+    public TypingCheck mCheatPlantCheck;
+    public TypingCheck mLazyClickCheck;
+    public TypingCheck mWinGameCheck;
+    public TypingCheck mKillZomCheck;
+    public TypingCheck mKillPlantCheck;
+    public TypingCheck mKillAllCheck;
+    public TypingCheck mCherryBoomCheck;
+    public TypingCheck mFastCheck;
+    public TypingCheck mLoveCheck;
+    public TypingCheck mFrozeCheck;
+    public TypingCheck mReTrackCheck;
+    public TypingCheck mDoTrackCheck;
+    public TypingCheck mFillHoeCheck;
+    public TypingCheck mFinalCheck;
+    public TypingCheck mNextLevelCheck;
     public boolean mMustacheMode;
     public boolean mSuperMowerMode;
     public boolean mFutureMode;
@@ -244,6 +274,7 @@ public class LawnApp extends SexyApp {
         mFirstTimeGameSelector = true;
         mGameMode = GameMode.GAMEMODE_ADVENTURE;
         mEasyPlantingCheat = false;
+        mAutoCollectCheat = false;
         // The original game always paused on focus loss; the preference starts in that state. The
         // framework's mute-on-lost-focus rides along: with the auto pause on, leaving the window
         // also silences every music track and sound (including where the pause dialog itself does
@@ -416,6 +447,18 @@ public class LawnApp extends SexyApp {
         mEffectSystem = new EffectSystem();
         mEffectSystem.effectSystemInitialize();
 
+        initTypingChecks();
+
+        Reanimator.reanimatorLoadDefinitions(Reanimator.gLawnReanimationArray, ReanimationType.NUM_REANIMS);
+        Reanimator.reanimatorEnsureDefinitionLoaded(ReanimationType.REANIM_LOADBAR_SPROUT, true);
+        Reanimator.reanimatorEnsureDefinitionLoaded(ReanimationType.REANIM_LOADBAR_ZOMBIEHEAD, true);
+    }
+
+    /**
+     * PORT-NOTE (deviation): the typed-code matchers, factored out of {@link #init()} so tests can
+     * build an app that types cheat words without the full init.
+     */
+    void initTypingChecks() {
         mKonamiCheck = new TypingCheck();
         mKonamiCheck.addKeyCode(KeyCode.KEYCODE_UP);
         mKonamiCheck.addKeyCode(KeyCode.KEYCODE_UP);
@@ -436,10 +479,21 @@ public class LawnApp extends SexyApp {
         mDanceCheck = new TypingCheck("dance");
         mDaisyCheck = new TypingCheck("daisies");
         mSukhbirCheck = new TypingCheck("sukhbir");
-
-        Reanimator.reanimatorLoadDefinitions(Reanimator.gLawnReanimationArray, ReanimationType.NUM_REANIMS);
-        Reanimator.reanimatorEnsureDefinitionLoaded(ReanimationType.REANIM_LOADBAR_SPROUT, true);
-        Reanimator.reanimatorEnsureDefinitionLoaded(ReanimationType.REANIM_LOADBAR_ZOMBIEHEAD, true);
+        mCheatPlantCheck = new TypingCheck("cheatplant");
+        mLazyClickCheck = new TypingCheck("lazyclick");
+        mWinGameCheck = new TypingCheck("wingame");
+        mKillZomCheck = new TypingCheck("killzom");
+        mKillPlantCheck = new TypingCheck("killplant");
+        mKillAllCheck = new TypingCheck("killall");
+        mCherryBoomCheck = new TypingCheck("cherryboom");
+        mFastCheck = new TypingCheck("fast");
+        mLoveCheck = new TypingCheck("love");
+        mFrozeCheck = new TypingCheck("froze");
+        mReTrackCheck = new TypingCheck("retrack");
+        mDoTrackCheck = new TypingCheck("dotrack");
+        mFillHoeCheck = new TypingCheck("fillhoe");
+        mFinalCheck = new TypingCheck("final");
+        mNextLevelCheck = new TypingCheck("nextlevel");
     }
 
     // LawnApp::ChangeDirHook (LawnApp.cpp:1261)
@@ -1755,6 +1809,9 @@ public class LawnApp extends SexyApp {
             }
         } else if (gFastMo) {
             aUpdateCount = 20;
+        } else if (gCheatFastMo) {
+            // PORT-NOTE (deviation): the "fast" hidden cheat word runs the game at exactly 2×.
+            aUpdateCount = 2;
         }
 
         for (int i = 0; i < aUpdateCount; i++) {

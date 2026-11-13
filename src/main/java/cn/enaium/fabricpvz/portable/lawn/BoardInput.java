@@ -530,7 +530,9 @@ final class BoardInput {
 
         int aPlantCost = b.getCurrentPlantCost(aSeedPacket.mPacketType, aSeedPacket.mImitaterType);
         if (b.mApp.mEasyPlantingCheat) {
-            b.mToolTip.setWarningText("FREE_PLANTING_CHEAT");
+            // PORT-NOTE (deviation): upstream shows the raw untranslated debug string
+            // "FREE_PLANTING_CHEAT" here; this port shows the [EASY_PLANTING_CHEAT] lawn-strings key.
+            b.mToolTip.setWarningText("[EASY_PLANTING_CHEAT]");
         } else if (!aSeedPacket.mActive && (b.mApp.mGameMode == GameMode.GAMEMODE_CHALLENGE_BEGHOULED
                 || b.mApp.mGameMode == GameMode.GAMEMODE_CHALLENGE_BEGHOULED_TWIST)) {
             if (aSeedPacket.mPacketType == SeedType.SEED_BEGHOULED_BUTTON_CRATER) {
@@ -1720,6 +1722,249 @@ final class BoardInput {
             b.setSukhbirMode(!b.mSukhbirMode);
             return;
         }
+
+        doHiddenCheatCheck(b, theKey);
+    }
+
+    // PORT-NOTE (deviation): the fifteen hidden cheat words new to this port
+    // (cheatplant/lazyclick/wingame/killzom/killplant/killall/cherryboom/fast/love/froze/
+    // retrack/dotrack/fillhoe/final/nextlevel). Upstream Board::DoTypingCheck only knows
+    // mustache/trickedout/future/pinata/dance/daisies/sukhbir; these are matched with the same
+    // TypingCheck machinery but only act while a level is being played.
+    private static void doHiddenCheatCheck(Board b, int theKey) {
+        if (b.mApp.mGameScene != GameScenes.SCENE_PLAYING) {
+            return;
+        }
+
+        if (b.mApp.mCheatPlantCheck.check(theKey)) {
+            b.mApp.mEasyPlantingCheat = !b.mApp.mEasyPlantingCheat;
+            b.displayAdvice(b.mApp.mEasyPlantingCheat ? "[ADVICE_EASY_PLANTING_CHEAT_ON]"
+                    : "[ADVICE_EASY_PLANTING_CHEAT_OFF]", MessageStyle.MESSAGE_STYLE_BIG_MIDDLE_FAST,
+                    AdviceType.ADVICE_NONE);
+            return;
+        }
+        if (b.mApp.mLazyClickCheck.check(theKey)) {
+            b.mApp.mAutoCollectCheat = !b.mApp.mAutoCollectCheat;
+            b.displayAdvice(b.mApp.mAutoCollectCheat ? "[ADVICE_LAZY_CLICK_ON]" : "[ADVICE_LAZY_CLICK_OFF]",
+                    MessageStyle.MESSAGE_STYLE_BIG_MIDDLE_FAST, AdviceType.ADVICE_NONE);
+            if (b.mApp.mAutoCollectCheat) {
+                for (Coin aCoin : b.mCoins) {
+                    if (!aCoin.mDead && !aCoin.mIsBeingCollected) {
+                        aCoin.tryAutoCollectAfterLevelAward();
+                    }
+                }
+            }
+            return;
+        }
+        if (b.mApp.mWinGameCheck.check(theKey)) {
+            winGameCheat(b);
+            return;
+        }
+        if (b.mApp.mNextLevelCheck.check(theKey)) {
+            b.mApp.mBoardResult = BoardResult.BOARDRESULT_WON;
+            b.fadeOutLevel();
+            return;
+        }
+        if (b.mApp.mReTrackCheck.check(theKey)) {
+            restoreLawnMowersCheat(b);
+            return;
+        }
+        if (b.mApp.mDoTrackCheck.check(theKey)) {
+            startLawnMowersCheat(b);
+            return;
+        }
+        if (b.mApp.mFillHoeCheck.check(theKey)) {
+            fillCratersCheat(b);
+            return;
+        }
+        if (b.mApp.mFinalCheck.check(theKey)) {
+            finalWaveCheat(b);
+            return;
+        }
+        if (b.mApp.mKillZomCheck.check(theKey)) {
+            killAllZombiesCheat(b);
+            b.displayAdvice("[ADVICE_KILL_ZOMBIES]", MessageStyle.MESSAGE_STYLE_BIG_MIDDLE_FAST,
+                    AdviceType.ADVICE_NONE);
+            return;
+        }
+        if (b.mApp.mKillPlantCheck.check(theKey)) {
+            killAllPlantsCheat(b);
+            b.displayAdvice("[ADVICE_KILL_PLANTS]", MessageStyle.MESSAGE_STYLE_BIG_MIDDLE_FAST,
+                    AdviceType.ADVICE_NONE);
+            return;
+        }
+        if (b.mApp.mKillAllCheck.check(theKey)) {
+            killAllPlantsCheat(b);
+            killAllZombiesCheat(b);
+            b.displayAdvice("[ADVICE_KILL_ALL]", MessageStyle.MESSAGE_STYLE_BIG_MIDDLE_FAST,
+                    AdviceType.ADVICE_NONE);
+            return;
+        }
+        if (b.mApp.mCherryBoomCheck.check(theKey)) {
+            cherryBoomCheat(b);
+            return;
+        }
+        if (b.mApp.mFastCheck.check(theKey)) {
+            LawnApp.gSlowMo = false;
+            LawnApp.gFastMo = false;
+            LawnApp.gCheatFastMo = !LawnApp.gCheatFastMo;
+            b.displayAdvice(LawnApp.gCheatFastMo ? "[ADVICE_2X_ON]" : "[ADVICE_2X_OFF]",
+                    MessageStyle.MESSAGE_STYLE_BIG_MIDDLE_FAST, AdviceType.ADVICE_NONE);
+            return;
+        }
+        if (b.mApp.mLoveCheck.check(theKey)) {
+            for (Zombie aZombie : b.mZombies) {
+                if (!aZombie.mDead && !aZombie.isDeadOrDying() && !aZombie.mMindControlled) {
+                    ZombieStatus.startMindControlled(aZombie);
+                }
+            }
+            return;
+        }
+        if (b.mApp.mFrozeCheck.check(theKey)) {
+            for (Zombie aZombie : b.mZombies) {
+                if (!aZombie.mDead && !aZombie.isDeadOrDying()) {
+                    ZombieStatus.hitIceTrap(aZombie);
+                }
+            }
+            return;
+        }
+    }
+
+    // PORT-NOTE (deviation): helper of the killzom/killall hidden cheat words — every living zombie
+    // takes lethal damage, which plays its normal death animation (ZombieStatus.dieNoLoot would just
+    // set mDead and remove it instantly).
+    private static void killAllZombiesCheat(Board b) {
+        for (Zombie aZombie : b.mZombies) {
+            if (!aZombie.mDead && !aZombie.isDeadOrDying()) {
+                aZombie.takeDamage(99999, DamageFlags.DAMAGE_HITS_SHIELD_AND_BODY);
+            }
+        }
+    }
+
+    // PORT-NOTE (deviation): helper of the killplant/killall hidden cheat words — every plant on the
+    // board dies (its own removal effects included).
+    private static void killAllPlantsCheat(Board b) {
+        for (Plant aPlant : b.mPlants) {
+            if (!aPlant.mDead) {
+                aPlant.die();
+            }
+        }
+    }
+
+    // PORT-NOTE (deviation): the cherryboom hidden cheat word — stack-plants a cherry bomb on every
+    // grid cell of the lawn (the pool and fog lawns carry six lanes, every other lawn five), over
+    // anything already planted there. Each bomb then explodes through its own normal
+    // Plant::DoSpecial chain; addPlant performs no occupancy check (the 'q' debug key force-plants
+    // the same way).
+    private static void cherryBoomCheat(Board b) {
+        int aNumRows = b.mBackground == BackgroundType.BACKGROUND_3_POOL
+                || b.mBackground == BackgroundType.BACKGROUND_4_FOG ? 6 : 5;
+        for (int aY = 0; aY < aNumRows; aY++) {
+            for (int aX = 0; aX < Board.MAX_GRID_SIZE_X; aX++) {
+                b.addPlant(aX, aY, SeedType.SEED_CHERRYBOMB, SeedType.SEED_NONE);
+            }
+        }
+    }
+
+    // PORT-NOTE (deviation): the wingame hidden cheat word — drives the board into exactly the
+    // state the natural victory would have. On wave-based stages (survival, last stand, endless
+    // I'm Zombie, puzzle mid-stage) that means: every wave spent, the field cleared and no flag-wave
+    // prep left pending, then the same COIN_NONE + FadeOutLevel flow ZombieStatus.trySpawnLevelAward
+    // takes there (marking the award dropped without a collectible would otherwise freeze wave
+    // spawning against the still-pending flag prep). On every other level the level's own award coin
+    // (ZombieStatus.levelAwardCoinType) spawns at the board centre and is collected, which runs the
+    // award's fan-out and level fade-out ceremony.
+    private static void winGameCheat(Board b) {
+        if (b.hasLevelAwardDropped()) {
+            return;
+        }
+
+        b.mApp.mBoardResult = BoardResult.BOARDRESULT_WON;
+
+        if (b.isSurvivalStageWithRepick() || b.isLastStandStageWithRepick()
+                || LawnApp.isEndlessIZombie(b.mApp.mGameMode)
+                || (b.mApp.isScaryPotterLevel() && !b.isFinalScaryPotterStage())) {
+            b.mCurrentWave = b.mNumWaves;
+            b.mHugeWaveCountDown = 0;
+            b.clearAdvice(AdviceType.ADVICE_HUGE_WAVE);
+            b.removeAllZombies();
+            b.mLevelAwardSpawned = true;
+            b.fadeOutLevel();
+            return;
+        }
+
+        b.mHugeWaveCountDown = 0;
+        b.clearAdvice(AdviceType.ADVICE_HUGE_WAVE);
+        b.mLevelAwardSpawned = true;
+        int aCoinType = ZombieStatus.levelAwardCoinType(b);
+        if (aCoinType == CoinType.COIN_NONE) {
+            return;
+        }
+
+        b.mApp.playFoley(FoleyType.FOLEY_SPAWN_SUN);
+        Coin aAward = b.addCoin(400, 300, aCoinType, CoinMotion.COIN_MOTION_COIN);
+        aAward.collect();
+    }
+
+    // PORT-NOTE (deviation): the retrack hidden cheat word — gives every row that has lost its
+    // mower a fresh one, skipping the dirt rows that never carry one (the eligibility rule of
+    // Board::InitLawnMowers, Board.cpp:1611). The new mower rolls in from off-board exactly like
+    // the bonus mower of LawnMower::Die (LawnMower.cpp:323-331) — in MOWER_READY state it would sit
+    // parked off-screen at x=-160 — and the zamboni driving sound plays while it does.
+    private static void restoreLawnMowersCheat(Board b) {
+        boolean aRestored = false;
+        for (int aRow = 0; aRow < Board.MAX_GRID_SIZE_Y; aRow++) {
+            if (b.mPlantRow[aRow] == PlantRowType.PLANTROW_DIRT) {
+                continue;
+            }
+            boolean aHasMower = false;
+            for (LawnMower aMower : b.mLawnMowers) {
+                if (!aMower.mDead && aMower.mRow == aRow) {
+                    aHasMower = true;
+                    break;
+                }
+            }
+            if (!aHasMower) {
+                LawnMower aMower = b.mLawnMowers.dataArrayAlloc();
+                aMower.lawnMowerInitialize(aRow);
+                aMower.mMowerState = LawnMowerState.MOWER_ROLLING_IN;
+                aRestored = true;
+            }
+        }
+        if (aRestored) {
+            b.mApp.playSample(SoundType.SOUND_ZAMBONI);
+        }
+    }
+
+    // PORT-NOTE (deviation): the dotrack hidden cheat word — triggers every ready mower at once
+    // (LawnMower::StartMower, LawnMower.cpp:382-404).
+    private static void startLawnMowersCheat(Board b) {
+        for (LawnMower aMower : b.mLawnMowers) {
+            if (!aMower.mDead && aMower.mMowerState == LawnMowerState.MOWER_READY) {
+                aMower.startMower();
+            }
+        }
+    }
+
+    // PORT-NOTE (deviation): the fillhoe hidden cheat word — removes every crater grid item the
+    // doom-shroom left behind, making its cell plantable again.
+    private static void fillCratersCheat(Board b) {
+        for (GridItem aGridItem : b.mGridItems) {
+            if (!aGridItem.mDead && aGridItem.mGridItemType == GridItemType.GRIDITEM_CRATER) {
+                aGridItem.gridItemDie();
+            }
+        }
+    }
+
+    // PORT-NOTE (deviation): the final hidden cheat word — jumps the wave counter straight to the
+    // last wave and lets it arrive on the next spawn tick (the flag-wave ceremony plays as usual).
+    private static void finalWaveCheat(Board b) {
+        if (b.hasLevelAwardDropped() || b.mCurrentWave >= b.mNumWaves - 1) {
+            return;
+        }
+
+        b.mCurrentWave = b.mNumWaves - 1;
+        b.mZombieCountDown = 1;
     }
 
     // Board.cpp:7668-7671 (static PvzpCrash)

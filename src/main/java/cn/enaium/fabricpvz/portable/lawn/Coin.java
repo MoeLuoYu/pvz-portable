@@ -584,6 +584,14 @@ public class Coin extends GameObject {
             return;
         }
 
+        // PORT-NOTE (deviation): the "lazyclick" hidden cheat word auto-collects every sun, coin and
+        // pick-up as it appears, without a click.
+        if (mBoard != null && mBoard.mApp.mAutoCollectCheat && !mDead && !mIsBeingCollected
+                && canBeAutoCollected()) {
+            tryAutoCollectAfterLevelAward();
+            return;
+        }
+
         if (mFadeCount != 0) {
             updateFade();
         } else if (!mIsBeingCollected) {
@@ -805,22 +813,22 @@ public class Coin extends GameObject {
 
     /** Ported from src/Lawn/Coin.cpp:1021-1042. */
     public void tryAutoCollectAfterLevelAward() {
-        boolean aCanBeAutoCollected = false;
-        if (isMoney() && mCoinMotion != CoinMotion.COIN_MOTION_FROM_PRESENT) {
-            aCanBeAutoCollected = true;
-        }
-        if (isSun()) {
-            aCanBeAutoCollected = true;
-        }
-        if (mType == CoinType.COIN_PRESENT_PLANT || mType == CoinType.COIN_CHOCOLATE
-            || isPresentWithAdvice()) {
-            aCanBeAutoCollected = true;
-        }
-
-        if (aCanBeAutoCollected) {
+        if (canBeAutoCollected()) {
             playCollectSound();
             collect();
         }
+    }
+
+    /** PORT-NOTE (deviation): the auto-collect predicate of {@link #tryAutoCollectAfterLevelAward()}, shared with the lazyclick cheat. */
+    private boolean canBeAutoCollected() {
+        if (isMoney() && mCoinMotion != CoinMotion.COIN_MOTION_FROM_PRESENT) {
+            return true;
+        }
+        if (isSun()) {
+            return true;
+        }
+        return mType == CoinType.COIN_PRESENT_PLANT || mType == CoinType.COIN_CHOCOLATE
+            || isPresentWithAdvice();
     }
 
     /** Ported from src/Lawn/Coin.cpp:1044-1290. */

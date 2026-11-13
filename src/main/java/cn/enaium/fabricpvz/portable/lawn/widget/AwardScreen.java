@@ -667,7 +667,7 @@ public class AwardScreen extends Widget {
                     AchievementsScreen.gAchievementList[anItem.mId].name);
             String aAchievementDesc = mApp.getString(AchievementsScreen.gAchievementList[anItem.mId].description,
                     AchievementsScreen.gAchievementList[anItem.mId].description);
-            aAchievementName = aAchievementName + " Earned!";
+            aAchievementName = aAchievementName + mApp.getString("ACHIEVEMENTS_EARNED", " Earned!");
 
             Rect aSrcRect = new Rect(70 * (anItem.mId % 7), 70 * (anItem.mId / 7), 70, 70);
             Rect aDestRect = new Rect(220, anItem.mY + 10, 70, 70);

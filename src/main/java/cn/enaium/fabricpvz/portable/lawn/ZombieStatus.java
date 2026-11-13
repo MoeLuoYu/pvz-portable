@@ -458,28 +458,6 @@ public final class ZombieStatus {
             aCoinType = CoinType.COIN_NONE;
             z.mBoard.mChallenge.puzzlePhaseComplete(
                     z.mBoard.pixelToGridXKeepOnBoard((int) (z.mPosX + 75.0f), (int) z.mPosY), z.mRow);
-        } else if (z.mApp.isAdventureMode() && z.mBoard.mLevel <= 50) {
-            if (z.mBoard.mLevel == 9 || z.mBoard.mLevel == 19 || z.mBoard.mLevel == 29
-                    || z.mBoard.mLevel == 39 || z.mBoard.mLevel == 49) {
-                aCoinType = CoinType.COIN_NOTE;
-            } else if (z.mBoard.mLevel == 50) {
-                aCoinType = z.mApp.hasFinishedAdventure()
-                        ? CoinType.COIN_AWARD_MONEY_BAG : CoinType.COIN_AWARD_SILVER_SUNFLOWER;
-            } else if (z.mApp.hasFinishedAdventure()) {
-                aCoinType = CoinType.COIN_AWARD_MONEY_BAG;
-            } else if (z.mBoard.mLevel == 4) {
-                aCoinType = CoinType.COIN_SHOVEL;
-            } else if (z.mBoard.mLevel == 14) {
-                aCoinType = CoinType.COIN_ALMANAC;
-            } else if (z.mBoard.mLevel == 24) {
-                aCoinType = CoinType.COIN_CARKEYS;
-            } else if (z.mBoard.mLevel == 34) {
-                aCoinType = CoinType.COIN_TACO;
-            } else if (z.mBoard.mLevel == 44) {
-                aCoinType = CoinType.COIN_WATERING_CAN;
-            } else {
-                aCoinType = CoinType.COIN_FINAL_SEED_PACKET;
-            }
         } else if (z.mBoard.isSurvivalStageWithRepick()) {
             aCoinType = CoinType.COIN_NONE;
             z.mBoard.fadeOutLevel();
@@ -491,16 +469,10 @@ public final class ZombieStatus {
             for (int i = 0; i < 10; i++) {
                 z.mBoard.addCoin(aCenterX + i * 5, aCenterY, CoinType.COIN_SUN, CoinMotion.COIN_MOTION_COIN);
             }
-        } else if (!z.mApp.isAdventureMode()) {
-            if (z.mApp.hasBeatenChallenge(z.mApp.mGameMode)) {
-                aCoinType = CoinType.COIN_AWARD_MONEY_BAG;
-            } else if (z.mApp.trophiesNeedForGoldSunflower() == 1) {
-                aCoinType = CoinType.COIN_AWARD_GOLD_SUNFLOWER;
-            } else {
-                aCoinType = CoinType.COIN_TROPHY;
-            }
         } else {
-            aCoinType = CoinType.COIN_AWARD_MONEY_BAG;
+            // PORT-NOTE (deviation): the adventure/challenge award-type selection factored out of this
+            // chain so the wingame hidden cheat word can grant the same loot.
+            aCoinType = levelAwardCoinType(z.mBoard);
         }
 
         int aCoinMotion = CoinMotion.COIN_MOTION_COIN;
@@ -515,6 +487,48 @@ public final class ZombieStatus {
 
         z.mDroppedLoot = true;
         return true;
+    }
+
+    /**
+     * PORT-NOTE (deviation): the adventure/challenge level-award coin selection, factored out of
+     * {@link #trySpawnLevelAward} (whose COIN_NONE branches for the scary-potter / survival-repick /
+     * last-stand flows stay there) so the wingame hidden cheat word can grant the same loot.
+     */
+    public static int levelAwardCoinType(Board theBoard) {
+        LawnApp aApp = theBoard.mApp;
+        if (aApp.isAdventureMode() && theBoard.mLevel <= 50) {
+            if (theBoard.mLevel == 9 || theBoard.mLevel == 19 || theBoard.mLevel == 29
+                    || theBoard.mLevel == 39 || theBoard.mLevel == 49) {
+                return CoinType.COIN_NOTE;
+            } else if (theBoard.mLevel == 50) {
+                return aApp.hasFinishedAdventure()
+                        ? CoinType.COIN_AWARD_MONEY_BAG : CoinType.COIN_AWARD_SILVER_SUNFLOWER;
+            } else if (aApp.hasFinishedAdventure()) {
+                return CoinType.COIN_AWARD_MONEY_BAG;
+            } else if (theBoard.mLevel == 4) {
+                return CoinType.COIN_SHOVEL;
+            } else if (theBoard.mLevel == 14) {
+                return CoinType.COIN_ALMANAC;
+            } else if (theBoard.mLevel == 24) {
+                return CoinType.COIN_CARKEYS;
+            } else if (theBoard.mLevel == 34) {
+                return CoinType.COIN_TACO;
+            } else if (theBoard.mLevel == 44) {
+                return CoinType.COIN_WATERING_CAN;
+            } else {
+                return CoinType.COIN_FINAL_SEED_PACKET;
+            }
+        } else if (!aApp.isAdventureMode()) {
+            if (aApp.hasBeatenChallenge(aApp.mGameMode)) {
+                return CoinType.COIN_AWARD_MONEY_BAG;
+            } else if (aApp.trophiesNeedForGoldSunflower() == 1) {
+                return CoinType.COIN_AWARD_GOLD_SUNFLOWER;
+            } else {
+                return CoinType.COIN_TROPHY;
+            }
+        } else {
+            return CoinType.COIN_AWARD_MONEY_BAG;
+        }
     }
 
     /** Ported from src/Lawn/Zombie.cpp:7277-7319 (Zombie::DropLoot). */
