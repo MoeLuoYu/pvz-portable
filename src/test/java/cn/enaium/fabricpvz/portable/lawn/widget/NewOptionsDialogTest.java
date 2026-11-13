@@ -151,6 +151,8 @@ class NewOptionsDialogTest {
                 aDialog.mHardwareAccelerationCheckbox.mY);
         assertEquals(206 + NewOptionsDialog.FROM_SELECTOR_FULLSCREEN_OFFSET_Y,
                 aDialog.mFullscreenCheckbox.mY);
+        assertEquals(206 + NewOptionsDialog.FROM_SELECTOR_FULLSCREEN_OFFSET_Y,
+                aDialog.mDebugInfoCheckbox.mY, "the debug checkbox rides with the fullscreen row");
     }
 
     @Test
@@ -205,5 +207,67 @@ class NewOptionsDialogTest {
         assertEquals(5, NewOptionsDialog.NewOptionsDialog_SoundVolume);
         assertEquals(6, NewOptionsDialog.NewOptionsDialog_Fullscreen);
         assertEquals(7, NewOptionsDialog.NewOptionsDialog_HardwareAcceleration);
+        // A port addition beyond the upstream enum.
+        assertEquals(8, NewOptionsDialog.NewOptionsDialog_AutoPause);
+        assertEquals(9, NewOptionsDialog.NewOptionsDialog_DebugInfo);
+    }
+
+    /** The debug-overlay checkbox sits in the left column, vertically aligned with the fullscreen row. */
+    @Test
+    void debugInfoCheckboxAlignsWithTheFullscreenRow() {
+        LawnApp app = newApp();
+        NewOptionsDialog aDialog = newDialog(app, false);
+
+        assertEquals(NewOptionsDialog.DEBUG_INFO_CHECKBOX_X, aDialog.mDebugInfoCheckbox.mX);
+        assertEquals(aDialog.mAutoPauseCheckbox.mX, aDialog.mDebugInfoCheckbox.mX, "same column");
+        assertEquals(aDialog.mFullscreenCheckbox.mY, aDialog.mDebugInfoCheckbox.mY,
+                "same row as the fullscreen checkbox");
+    }
+
+    /** The debug-overlay checkbox shows the current flag and applies toggles immediately. */
+    @Test
+    void debugInfoCheckboxAppliesImmediately() {
+        LawnApp app = newApp();
+        app.mShowFPS = false;
+        NewOptionsDialog aDialog = newDialog(app, false);
+        assertFalse(aDialog.mDebugInfoCheckbox.isChecked());
+
+        aDialog.checkboxChecked(NewOptionsDialog.NewOptionsDialog_DebugInfo, true);
+        assertTrue(app.mShowFPS, "toggling applies at once");
+
+        aDialog.checkboxChecked(NewOptionsDialog.NewOptionsDialog_DebugInfo, false);
+        assertFalse(app.mShowFPS);
+    }
+
+    /** The auto-pause checkbox sits in the left column of the 3D-acceleration row, its label drawn
+     * to its left with the same checkbox/label gap the right column uses. */
+    @Test
+    void autoPauseCheckboxSitsLeftOfThe3DAccelerationCheckbox() {
+        LawnApp app = newApp();
+        NewOptionsDialog aDialog = newDialog(app, false);
+
+        assertEquals(NewOptionsDialog.AUTO_PAUSE_CHECKBOX_X, aDialog.mAutoPauseCheckbox.mX);
+        assertEquals(aDialog.mHardwareAccelerationCheckbox.mY, aDialog.mAutoPauseCheckbox.mY,
+                "same row as the 3D-acceleration checkbox");
+        assertTrue(aDialog.mAutoPauseCheckbox.mX + aDialog.mAutoPauseCheckbox.mWidth
+                        <= aDialog.mHardwareAccelerationCheckbox.mX,
+                "left of the 3D-acceleration checkbox");
+        assertEquals(NewOptionsDialog.AUTO_PAUSE_CHECKBOX_X - 9, NewOptionsDialog.AUTO_PAUSE_LABEL_X,
+                "the label anchors 9px left of the checkbox, mirroring the right column's 283/274 gap");
+    }
+
+    /** The checkbox reflects the app preference on open and applies toggles immediately. */
+    @Test
+    void autoPauseCheckboxAppliesImmediately() {
+        LawnApp app = newApp();
+        app.mAutoPause = true;
+        NewOptionsDialog aDialog = newDialog(app, false);
+        assertTrue(aDialog.mAutoPauseCheckbox.isChecked(), "the checkbox shows the current preference");
+
+        aDialog.checkboxChecked(NewOptionsDialog.NewOptionsDialog_AutoPause, false);
+        assertFalse(app.mAutoPause, "untoggling applies at once");
+
+        aDialog.checkboxChecked(NewOptionsDialog.NewOptionsDialog_AutoPause, true);
+        assertTrue(app.mAutoPause, "retoggling applies at once");
     }
 }

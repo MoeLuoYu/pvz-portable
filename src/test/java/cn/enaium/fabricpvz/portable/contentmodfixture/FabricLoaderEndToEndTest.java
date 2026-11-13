@@ -156,6 +156,14 @@ class FabricLoaderEndToEndTest {
         // 1) The loader itself: it resolved the game (built-in mod), the loader mod, the API modules
         // (mods on the class path) and the two mod jars from the mods directory.
         assertEquals("0.19.5", values.get("loaderVersion"), "the real Fabric Loader must be the one running");
+        // The provider's publication into the RuntimeEnvironment channel (the corner caption and
+        // the F3 overlay read these): the published loader version must equal what the loader
+        // itself reports above - the end-to-end guard against the caption/overlay showing "?".
+        assertEquals(values.get("loaderVersion"), values.get("publishedLoaderVersion"),
+                "the provider must publish the loader version into the game's system-property channel");
+        assertNotNull(values.get("publishedModsLoaded"));
+        assertNotEquals("<missing>", values.get("publishedModsLoaded"),
+                "the provider must publish the loaded-mods count");
         // Against the provider's own statement, not a literal: what this asserts is the wiring - the
         // loader is handed the version the game provider publishes, and `checkGameVersion` is what
         // keeps that constant equal to the version this build is packaged under.

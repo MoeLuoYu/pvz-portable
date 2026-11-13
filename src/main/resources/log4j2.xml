@@ -10,40 +10,70 @@
   `Log` (Knot's MixinServiceKnot logs through net.fabricmc.loader.impl.util.log, which is a `Log`
   category), and every mod and the game itself log through the SLF4J API directly.
 
-  Where the file lives: it is a resource of cn.enaium.fabricpvz:fabric-provider, which publishes the
-  whole stack (the SLF4J API, its Log4j binding and the Log4j backend) as runtime dependencies, so
-  every launch path - `./gradlew run` in PvZ-Portable, a mod's `runClient`, the end-to-end forks and
-  an installed game - reads this exact configuration off its class path.
+  Where the file lives: it is a resource of the game jar, which publishes the whole stack (the SLF4J
+  API, its Log4j binding and the Log4j backend) as launch dependencies, so every launch path -
+  `./gradlew run` in PvZ-Portable, a mod's `runClient`, the end-to-end forks and an installed game -
+  reads this exact configuration off its class path.
 
-  The format is the one Fabric Loom installs for mod development
+  Where the logs go: the console and, since this configuration grew a file appender, the game
+  directory's `logs/latest.log` - the same place Minecraft keeps its own. The game directory is the
+  `-Dpvz.gameDir` system property (the version json passes `${game_directory}`, `./gradlew run`
+  passes the project's `run/`); a launch that does not set it logs into `./logs/`. Each start rolls
+  the previous `latest.log` into `logs/<date>-<n>.log.gz` (OnStartupTriggeringPolicy, like
+  Minecraft's), a day boundary rolls it too (TimeBasedTriggeringPolicy), and at most 1000 archives
+  are kept (DefaultRolloverStrategy). Both appenders are wrapped in one Async appender, so a burst
+  of log lines never stalls the game thread; Log4j's own shutdown hook flushes what is queued.
+
+  The console format is the one Fabric Loom installs for mod development
   (fabric-loom's `log4j2.fabric.xml`, `GenerateLog4jConfigTask`), so a log from this workspace reads
   like a log from a Loom project:
     `[time] [thread/LEVEL] (logger) message`
   with the timestamp and the logger name as styles and the thread/level plus the message highlighted:
   level colours are Loom's (FATAL/ERROR red, WARN yellow, INFO green, DEBUG green, TRACE blue) and
   the message itself is only flagged red for FATAL/ERROR, normal otherwise - that is what makes a
-  wall of INFO lines readable.
+  wall of INFO lines readable. The file carries the plain, Minecraft-style shape of the same
+  information (`[date time] [thread/LEVEL]: [logger] message`), never with ANSI styles.
 
-  Colour switch: `-Dfabric.log.disableAnsi=true` turns the ANSI styles off, the same property name
-  Loom uses. Unlike Loom (which defaults it to `true`, because Minecraft's console usually is a
-  plain pipe) this workspace defaults to `false`: the colours are kept when stdout is not a TTY, so
-  a Gradle run, a captured boot log or CI output keeps the highlighting.
+  Colour switch: `-Dfabric.log.disableAnsi=true` turns the console's ANSI styles off, the same
+  property name Loom uses. Unlike Loom (which defaults it to `true`, because Minecraft's console
+  usually is a plain pipe) this workspace defaults to `false`: the colours are kept when stdout is
+  not a TTY, so a Gradle run, a captured boot log or CI output keeps the highlighting - and the file
+  is the plain-text copy for everything that parses logs.
 
-  The level: `-Dfabric.log.level=<trace|debug|info|warn|error>` (Fabric Loader's own switch, the same
-  one its built-in handler reads) sets the root level; without it the run is at INFO. Nothing is
-  written twice and no appender writes to a file, so a captured boot log is exactly what the console
-  showed.
+  The level: `-Dfabric.log.level=<trace|debug|info|warn|error>` (Fabric Loader's own switch, the
+  same one its built-in handler reads) sets the root level; without it the run is at INFO.
+  Nothing is written twice.
 -->
 <Configuration status="warn">
+  <Properties>
+    <!-- The logs directory of this run: the game directory's logs/, or ./logs/ when no game
+         directory was set (an unpacked distribution keeps it next to bin/ and lib/). -->
+    <Property name="pvzLogsDir">${sys:pvz.gameDir:-.}/logs</Property>
+  </Properties>
   <Appenders>
+    <RollingRandomAccessFile name="File"
+                             fileName="${pvzLogsDir}/latest.log"
+                             filePattern="${pvzLogsDir}/%d{yyyy-MM-dd}-%i.log.gz">
+      <PatternLayout disableAnsi="true"
+                     pattern="[%d{yyyy-MM-dd HH:mm:ss}] [%t/%level]: [%logger] %msg%n%xEx{full}"/>
+      <Policies>
+        <OnStartupTriggeringPolicy/>
+        <TimeBasedTriggeringPolicy/>
+      </Policies>
+      <DefaultRolloverStrategy max="1000"/>
+    </RollingRandomAccessFile>
     <Console name="Console" target="SYSTEM_OUT">
       <PatternLayout disableAnsi="${sys:fabric.log.disableAnsi:-false}"
                      pattern="%style{[%d{HH:mm:ss}]}{blue} %highlight{[%t/%level]}{FATAL=red, ERROR=red, WARN=yellow, INFO=green, DEBUG=green, TRACE=blue} %style{(%logger{1})}{cyan} %highlight{%msg%n}{FATAL=red, ERROR=red, WARN=normal, INFO=normal, DEBUG=normal, TRACE=normal}"/>
     </Console>
+    <Async name="Async">
+      <AppenderRef ref="File"/>
+      <AppenderRef ref="Console"/>
+    </Async>
   </Appenders>
   <Loggers>
     <Root level="${sys:fabric.log.level:-info}">
-      <AppenderRef ref="Console"/>
+      <AppenderRef ref="Async"/>
     </Root>
   </Loggers>
 </Configuration>

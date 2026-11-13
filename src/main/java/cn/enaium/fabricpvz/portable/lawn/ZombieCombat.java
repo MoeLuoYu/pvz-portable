@@ -95,6 +95,11 @@ public final class ZombieCombat {
                 z.reanimShowPrefix("Zombie_disco_chops", Reanimation.RENDER_GROUP_HIDDEN);
                 z.reanimShowPrefix("Zombie_backup_stash", Reanimation.RENDER_GROUP_HIDDEN);
                 aParticle.overrideImage(null, Resources.getImageById(ImageID.IMAGE_ZOMBIEBACKUPDANCERHEAD));
+                // PORT-NOTE (deviation): the head-drop particle's own base scale (0.8) stacks with
+                // the dancer's 0.8 body scale, so the falling head rendered at ~2/3 of the head the
+                // player just saw detach (community-reported as "shrinks to half"). Cancel the body
+                // scale here: the replacement image is already the head at body scale.
+                aParticle.overrideScale(null, 1.0f);
             } else if (z.mZombieType == ZombieType.ZOMBIE_BOBSLED) {
                 aParticle.overrideImage(null, Resources.getImageById(ImageID.IMAGE_ZOMBIEBOBSLEDHEAD));
             } else if (z.mZombieType == ZombieType.ZOMBIE_LADDER) {
@@ -179,8 +184,14 @@ public final class ZombieCombat {
                 z.reanimShowTrack("Zombie_outerarm_hand", Reanimation.RENDER_GROUP_HIDDEN);
                 break;
             case ZombieType.ZOMBIE_DANCER:
-                z.reanimShowTrack("Zombie_disco_outerarm_lower", Reanimation.RENDER_GROUP_HIDDEN);
-                z.reanimShowTrack("Zombie_disco_outerhand_point", Reanimation.RENDER_GROUP_HIDDEN);
+                // PORT-NOTE (deviation): the upstream rewrite hides "Zombie_disco_outerarm_lower" +
+                // "Zombie_disco_outerhand_point" here, but the patched-retail dancer reanim carries
+                // no "Zombie_disco_*" tracks at all - its arms are the generic "Zombie_outerarm_*"
+                // names - so both hides were no-ops: the dropped arm never left the body and swung
+                // back into view with every summon's pointing animation. Hide the tracks the
+                // reanim actually has (the generic ones, like the default branch below).
+                z.reanimShowPrefix("Zombie_outerarm_lower", Reanimation.RENDER_GROUP_HIDDEN);
+                z.reanimShowPrefix("Zombie_outerarm_hand", Reanimation.RENDER_GROUP_HIDDEN);
                 break;
             case ZombieType.ZOMBIE_BACKUP_DANCER:
                 z.reanimShowTrack("Zombie_disco_outerarm_lower", Reanimation.RENDER_GROUP_HIDDEN);

@@ -12,6 +12,8 @@ import java.util.Optional;
 import java.util.TreeSet;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
+
+import cn.enaium.fabricpvz.portable.pvzp.RuntimeEnvironment;
 import cn.enaium.fabricpvz.api.PvzFabricApi;
 import cn.enaium.fabricpvz.api.plant.PlantRegistry;
 import cn.enaium.fabricpvz.api.resource.ResourceOverrides;
@@ -98,6 +100,12 @@ public final class ContentModGameMain {
         report("loaderVersion", loader.getModContainer("fabricloader")
                 .map(container -> container.getMetadata().getVersion().getFriendlyString())
                 .orElse("<missing>"));
+        // What the provider published into the RuntimeEnvironment's system-property channel (the
+        // game reads these for the corner caption and the F3 overlay): reporting them here proves
+        // the publication works under the real loader - the loader version must match the loader's
+        // own report above.
+        report("publishedLoaderVersion", System.getProperty(RuntimeEnvironment.LOADER_VERSION_PROPERTY, "<missing>"));
+        report("publishedModsLoaded", System.getProperty(RuntimeEnvironment.LOADED_MODS_PROPERTY, "<missing>"));
         report("gameVersion", loader.getRawGameVersion());
         report("development", loader.isDevelopmentEnvironment());
         report("environment", loader.getEnvironmentType().name().toLowerCase(java.util.Locale.ROOT));

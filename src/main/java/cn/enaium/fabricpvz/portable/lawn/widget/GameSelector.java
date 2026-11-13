@@ -44,6 +44,7 @@ import cn.enaium.fabricpvz.portable.lawn.system.PlayerInfo;
 import cn.enaium.fabricpvz.portable.pvzp.PvzpCommon;
 import cn.enaium.fabricpvz.portable.pvzp.PvzpDebug;
 import cn.enaium.fabricpvz.portable.pvzp.PvzpResourceManager;
+import cn.enaium.fabricpvz.portable.pvzp.RuntimeEnvironment;
 import cn.enaium.fabricpvz.portable.pvzp.fx.FoleyType;
 import cn.enaium.fabricpvz.portable.pvzp.fx.PvzpParticleSystem;
 import cn.enaium.fabricpvz.portable.pvzp.reanim.ReanimatorTrack;
@@ -56,6 +57,7 @@ import cn.enaium.fabricpvz.portable.sexy.Dialog;
 import cn.enaium.fabricpvz.portable.sexy.DialogButton;
 import cn.enaium.fabricpvz.portable.sexy.KeyCode;
 import cn.enaium.fabricpvz.portable.sexy.SexyTransform2D;
+import cn.enaium.fabricpvz.portable.sexy.graphics.Font;
 import cn.enaium.fabricpvz.portable.sexy.SexyVector2;
 import cn.enaium.fabricpvz.portable.sexy.Widget;
 import cn.enaium.fabricpvz.portable.sexy.WidgetManager;
@@ -99,6 +101,9 @@ public class GameSelector extends Widget implements ButtonListener {
     // GameSelector.cpp:270 (mAlmanacButton->Resize(327, 428, ...))
     public static final int ALMANAC_BUTTON_X = 327;
     public static final int ALMANAC_BUTTON_Y = 428;
+
+    /** The color of the bottom-left corner caption (a soft white that reads on the dark lawn edge). */
+    public static final Color CAPTION_COLOR = new Color(235, 235, 225);
 
     /** GameSelector.cpp:49 (gFlowerCenter[3][2]). */
     public static final float[][] gFlowerCenter = {
@@ -531,6 +536,58 @@ public class GameSelector extends Widget implements ButtonListener {
         return mApp.reanimationTryToGet(mSelectorReanimID);
     }
 
+    /**
+     * The two caption lines in the bottom-left corner (a port addition, not in upstream): the loaded
+     * mod count, and the game/launcher/loader identity. Left-aligned at the screen edge; y values are
+     * baselines, laid out from the font's real metrics so any point size keeps both lines inside the
+     * strip below the achievements pedestal.
+     */
+    private void drawCornerCaption(Graphics g) {
+        Font aFont = mApp.getFont(Resources.FONT_BRIANNETOD12_ID);
+        if (aFont == null || aFont.mHeight <= 0) {
+            return;
+        }
+
+        int aLineSpacing = aFont.getLineSpacing();
+        int aLine2Baseline = mApp.mHeight - aFont.getDescent() - 5;
+        int aLine1Baseline = aLine2Baseline - aLineSpacing - 2;
+
+        g.setFont(aFont);
+        g.drawString(modCountLine(RuntimeEnvironment.totalMods(),
+                mApp.getString("MODS_HAS_LOADED", null)), 8, aLine1Baseline, CAPTION_COLOR);
+        g.drawString(versionLine(mApp.mProductVersion, RuntimeEnvironment.loaderVersion()),
+                8, aLine2Baseline, CAPTION_COLOR);
+    }
+
+    /**
+     * The caption's fallback template, used when the string table has no {@code [MODS_HAS_LOADED]}
+     * (other retail pak versions). English, like every other in-code default string.
+     */
+    static final String MODS_LOADED_TEMPLATE = "Mods loaded: {COUNT}";
+
+    /**
+     * The first caption line: how many mods are loaded. The retail string table carries it as
+     * {@code [MODS_HAS_LOADED]} with a {@code {COUNT}} placeholder when the assets provide it;
+     * otherwise the built-in English template is what shows.
+     */
+    static String modCountLine(int theTotalMods, String theTemplate) {
+        String aTemplate = theTemplate == null || theTemplate.isBlank()
+                ? MODS_LOADED_TEMPLATE : theTemplate;
+        return aTemplate.replace("{COUNT}", Integer.toString(theTotalMods));
+    }
+
+    /**
+     * The second caption line: the game and its version, then the mod loader with its version (the
+     * bare "Fabric" when nothing published a loader version - a run without the loader).
+     */
+    static String versionLine(String theVersion, String theLoaderVersion) {
+        String aFabric = "Fabric";
+        if (theLoaderVersion != null && !theLoaderVersion.isBlank()) {
+            aFabric += " " + theLoaderVersion;
+        }
+        return "Plants vs. Zombies GOTY " + theVersion + "/" + aFabric;
+    }
+
     private Image image(int theId) {
         return mApp.getImage(theId);
     }
@@ -739,6 +796,9 @@ public class GameSelector extends Widget implements ButtonListener {
     public void drawOverlay(Graphics g) {
         g.setLinearBlend(true);
         if (mApp.mPlayerInfo == null) {
+            // PORT-NOTE: GameSelector.cpp:597-700 returns early without a profile; the corner caption
+            // added below must draw regardless, so the early return becomes a guarded body here.
+            drawCornerCaption(g);
             return;
         }
 
@@ -844,6 +904,11 @@ public class GameSelector extends Widget implements ButtonListener {
         }
 
         mToolTip.draw(g);
+
+        // Last of all, above the grass, tombstones and every other overlay piece: the caption lives
+        // in this overlay (GameSelectorOverlay draws after the selector widget) because the selector
+        // itself paints below the grass that covers its bottom edge.
+        drawCornerCaption(g);
     }
 
     // GameSelector::UpdateTooltip (GameSelector.cpp:702-734)

@@ -275,6 +275,19 @@ public class SexyAppBase implements ButtonListener, DialogListener {
     public boolean mShowFPS;
     public int mShowFPSMode;
     public int mScreenBltTime;
+    // Rolling one-second frame statistics the debug overlay shows (a port addition; measured with
+    // nanoTime only, so the demo RNG stream is untouched).
+    /** Frames presented in the last full second. */
+    public int mDebugFps;
+    /** Average wall time of one update tick over the last full second, in milliseconds. */
+    public double mDebugUpdateMs;
+    /** Average wall time of one presented frame's screen draw over the last full second, in ms. */
+    public double mDebugDrawMs;
+    long mDebugFrameCount;
+    long mDebugUpdateTicks;
+    long mDebugUpdateAccumNs;
+    long mDebugDrawAccumNs;
+    long mDebugWindowStartNs;
     public boolean mAutoStartLoadingThread;
     public final AtomicBoolean mLoadingThreadStarted = new AtomicBoolean(false);
     public final AtomicBoolean mLoadingThreadCompleted = new AtomicBoolean(false);
@@ -719,6 +732,8 @@ public class SexyAppBase implements ButtonListener, DialogListener {
 
     // SexyAppBase::UpdateFrames (SexyAppBase.cpp:1652)
     public void updateFrames() {
+        long aStartNs = System.nanoTime();
+
         mUpdateCount++;
 
         if (!mMinimized) {
@@ -732,6 +747,60 @@ public class SexyAppBase implements ButtonListener, DialogListener {
             mMusicInterface.update();
         }
         cleanSharedImages();
+
+        mDebugUpdateAccumNs += System.nanoTime() - aStartNs;
+        mDebugUpdateTicks++;
+    }
+
+    /**
+     * The debug overlay's content hook (upstream {@code FPSDrawCoords}, a stub in this port until
+     * the F3 debug info landed): called by {@code WidgetManager.drawScreen} once per dirty frame
+     * with the screen-canvas graphics, after every widget has drawn and before the renderer
+     * composites the canvas into the window drawable. The default draws nothing; the game slice
+     * fills it.
+     */
+    protected void drawDebugOverlay(Graphics g) {
+    }
+
+    /**
+     * Called after F3 flipped {@link #mShowFPS}, so the game slice can re-sync a live options
+     * dialog's checkbox - the same pattern as {@code LawnApp.switchScreenMode} re-syncing the
+     * fullscreen checkbox after Alt+Enter / F11.
+     */
+    protected void debugInfoToggled() {
+    }
+
+    /**
+     * Advances the debug overlay's rolling one-second statistics with one presented frame's draw
+     * time; at the window edge the accumulators publish their averages.
+     */
+    private void rollDebugWindow(long theDrawNs) {
+        mDebugDrawAccumNs += theDrawNs;
+        mDebugFrameCount++;
+
+        long aNowNs = System.nanoTime();
+        if (mDebugWindowStartNs == 0) {
+            mDebugWindowStartNs = aNowNs;
+            return;
+        }
+
+        long anElapsedNs = aNowNs - mDebugWindowStartNs;
+        if (anElapsedNs < 1_000_000_000L) {
+            return;
+        }
+
+        double aSeconds = anElapsedNs / 1e9;
+        mDebugFps = (int) Math.round(mDebugFrameCount / aSeconds);
+        mDebugUpdateMs = mDebugUpdateTicks == 0
+                ? 0.0 : mDebugUpdateAccumNs / 1e6 / mDebugUpdateTicks;
+        mDebugDrawMs = mDebugFrameCount == 0
+                ? 0.0 : mDebugDrawAccumNs / 1e6 / mDebugFrameCount;
+
+        mDebugFrameCount = 0;
+        mDebugUpdateTicks = 0;
+        mDebugUpdateAccumNs = 0;
+        mDebugDrawAccumNs = 0;
+        mDebugWindowStartNs = aNowNs;
     }
 
     // SexyAppBase::DoUpdateFramesF (SexyAppBase.cpp:1663)
@@ -794,15 +863,12 @@ public class SexyAppBase implements ButtonListener, DialogListener {
     public boolean drawDirtyStuff() {
         MTRand.setRandAllowed(false);
         try {
-            if (mShowFPS) {
-                // FPS/coords overlay drawing is not implemented in this port (upstream FPSDrawCoords
-                // and CalculateDemoTimeLeft are empty stubs as well).
-            }
-
             int aStartTime = ticks();
 
             mIsDrawing = true;
+            long aDrawStartNs = System.nanoTime();
             boolean drewScreen = mWidgetManager.drawScreen();
+            long aDrawNs = System.nanoTime() - aDrawStartNs;
             mIsDrawing = false;
 
             if ((drewScreen || (aStartTime - mLastDrawTick >= 1000) || mCustomCursorDirty)
@@ -810,6 +876,7 @@ public class SexyAppBase implements ButtonListener, DialogListener {
                 mLastDrawWasEmpty = false;
 
                 mDrawCount++;
+                rollDebugWindow(aDrawNs);
 
                 int aMidTime = ticks();
 
@@ -3117,6 +3184,19 @@ public class SexyAppBase implements ButtonListener, DialogListener {
             mScreenBounds = logicalCanvasBounds();
             mWidgetManager.resize(mScreenBounds, logicalPresentationRect());
         }
+
+        // Paint the boot splash the moment the window exists (a port addition): the OS window would
+        // otherwise sit black until the game's first real frame, which waits for the pak to load.
+        drawBootSplashOnce();
+    }
+
+    /**
+     * Called once at the end of {@link #makeWindow}, with the window and its canvas fresh: the game
+     * paints its boot splash here (and presents it), so the player sees content instead of a black
+     * window for the whole resource load. The default paints nothing - the content is game-side,
+     * like {@link #drawDebugOverlay}.
+     */
+    protected void drawBootSplashOnce() {
     }
 
     // SexyAppBase::InitGLInterface (SexyAppBase.cpp:2910)
@@ -3933,6 +4013,30 @@ public class SexyAppBase implements ButtonListener, DialogListener {
                         && (theEvent.keyCode == KeyCode.KEYCODE_RETURN)
                         && mAltDown) {
                     switchScreenMode(!mIsWindowed);
+                    break;
+                }
+
+                // F11 toggles the screen mode like Alt+Enter (a port addition; upstream binds only
+                // Alt+Enter here). It shares switchScreenMode, so a live options dialog re-syncs its
+                // checkbox through LawnApp's SwitchScreenMode override and the final mode is
+                // persisted by WriteToRegistry on exit. Auto-repeat does not toggle, and the key is
+                // never delivered to widgets, like the Alt+Enter branch above.
+                if (!theEvent.repeat && theEvent.keyCode == KeyCode.KEYCODE_F11) {
+                    switchScreenMode(!mIsWindowed);
+                    break;
+                }
+
+                // F3 toggles the debug overlay (a port addition, after Minecraft's F3): upstream's
+                // ShowFPS flag existed but was command-line only, and its FPSDrawCoords stayed a
+                // stub in this port until the overlay content landed in the game slice. The screen
+                // must redraw right away - on a surface with nothing animating, the overlay would
+                // otherwise wait for the next dirty widget to show or clear.
+                if (!theEvent.repeat && theEvent.keyCode == KeyCode.KEYCODE_F3) {
+                    mShowFPS = !mShowFPS;
+                    if (mWidgetManager != null) {
+                        mWidgetManager.markAllDirty();
+                    }
+                    debugInfoToggled();
                     break;
                 }
 

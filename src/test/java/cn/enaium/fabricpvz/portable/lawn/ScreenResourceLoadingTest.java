@@ -25,8 +25,9 @@ import cn.enaium.fabricpvz.portable.pvzp.TestAssets;
  */
 class ScreenResourceLoadingTest {
 
-    /** Boots the real game once (asset-gated like {@code GameBootSmokeTest}). */
-    private static LawnApp boot(Path saveDir, Path resourceRoot) throws IOException, InterruptedException {
+    /** Boots the real game once (asset-gated like {@code GameBootSmokeTest}). Package-visible: the
+     * other real-asset tests ({@code ZombieTest}) need the same fully loaded app. */
+    static LawnApp boot(Path saveDir, Path resourceRoot) throws IOException, InterruptedException {
         // The entry point installs the resource extractor (upstream main.cpp); without it a group load
         // marks the group loaded but binds nothing, which is what made every delay-load screen draw null.
         Main.installHooks();

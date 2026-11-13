@@ -107,8 +107,9 @@ public class TitleScreen extends Widget implements ButtonListener {
         g.setLinearBlend(true);
 
         if (mTitleState == TITLESTATE_WAITING_FOR_FIRST_DRAW) {
-            g.setColor(Color.Black);
-            g.fillRect(0, 0, mWidth, mHeight);
+            // PORT-NOTE: upstream fills black here; this port draws the boot splash instead - the
+            // screen would otherwise sit black for the whole pak load.
+            mApp.drawBootSplash(g);
 
             if (!mDrawnYet) {
                 PvzpDebug.pvzpLogLn("First Draw Time: {} ms", System.currentTimeMillis() - mApp.mTimeLoaded);
@@ -164,8 +165,9 @@ public class TitleScreen extends Widget implements ButtonListener {
         }
 
         if (!mLoaderScreenIsLoaded) {
-            g.setColor(Color.Black);
-            g.fillRect(0, 0, mWidth, mHeight);
+            // PORT-NOTE: upstream fills black while the LoaderBar group loads; this port draws the
+            // boot splash (the same image that covered the wait before the pak opened).
+            mApp.drawBootSplash(g);
             return;
         }
 

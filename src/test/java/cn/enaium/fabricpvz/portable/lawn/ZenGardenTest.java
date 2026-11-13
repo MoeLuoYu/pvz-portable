@@ -471,19 +471,22 @@ class ZenGardenTest {
         assertFalse(mZen.plantCanHaveChocolate(aPlant));
     }
 
-    /** ZenGarden.cpp:407-453: the sell price table per age and plant class. */
+    /** ZenGarden.cpp:407-453, at the retail ×10 (see the PORT-NOTE on getPlantSellPrice): the
+     * upstream rewrite dropped the tenfold, which priced a full marigold at 300 against a 2500
+     * sprout and broke the zen-garden economy. The community-verified retail table is what the
+     * game pays. */
     @Test
-    void getPlantSellPriceMatchesUpstream() {
-        assertEquals(150, sellPrice(SeedType.SEED_MARIGOLD, PottedPlantAge.PLANTAGE_SPROUT));
-        assertEquals(200, sellPrice(SeedType.SEED_MARIGOLD, PottedPlantAge.PLANTAGE_SMALL));
-        assertEquals(250, sellPrice(SeedType.SEED_MARIGOLD, PottedPlantAge.PLANTAGE_MEDIUM));
-        assertEquals(300, sellPrice(SeedType.SEED_MARIGOLD, PottedPlantAge.PLANTAGE_FULL));
-        assertEquals(150, sellPrice(SeedType.SEED_PEASHOOTER, PottedPlantAge.PLANTAGE_SPROUT));
-        assertEquals(300, sellPrice(SeedType.SEED_PEASHOOTER, PottedPlantAge.PLANTAGE_SMALL));
-        assertEquals(500, sellPrice(SeedType.SEED_PEASHOOTER, PottedPlantAge.PLANTAGE_MEDIUM));
-        assertEquals(800, sellPrice(SeedType.SEED_PEASHOOTER, PottedPlantAge.PLANTAGE_FULL));
-        assertEquals(1000, sellPrice(SeedType.SEED_LILYPAD, PottedPlantAge.PLANTAGE_FULL));
-        assertEquals(1000, sellPrice(SeedType.SEED_PUFFSHROOM, PottedPlantAge.PLANTAGE_FULL));
+    void getPlantSellPriceMatchesRetail() {
+        assertEquals(1500, sellPrice(SeedType.SEED_MARIGOLD, PottedPlantAge.PLANTAGE_SPROUT));
+        assertEquals(2000, sellPrice(SeedType.SEED_MARIGOLD, PottedPlantAge.PLANTAGE_SMALL));
+        assertEquals(2500, sellPrice(SeedType.SEED_MARIGOLD, PottedPlantAge.PLANTAGE_MEDIUM));
+        assertEquals(3000, sellPrice(SeedType.SEED_MARIGOLD, PottedPlantAge.PLANTAGE_FULL));
+        assertEquals(1500, sellPrice(SeedType.SEED_PEASHOOTER, PottedPlantAge.PLANTAGE_SPROUT));
+        assertEquals(3000, sellPrice(SeedType.SEED_PEASHOOTER, PottedPlantAge.PLANTAGE_SMALL));
+        assertEquals(5000, sellPrice(SeedType.SEED_PEASHOOTER, PottedPlantAge.PLANTAGE_MEDIUM));
+        assertEquals(8000, sellPrice(SeedType.SEED_PEASHOOTER, PottedPlantAge.PLANTAGE_FULL));
+        assertEquals(10000, sellPrice(SeedType.SEED_LILYPAD, PottedPlantAge.PLANTAGE_FULL));
+        assertEquals(10000, sellPrice(SeedType.SEED_PUFFSHROOM, PottedPlantAge.PLANTAGE_FULL));
     }
 
     private int sellPrice(int theSeedType, int thePlantAge) {

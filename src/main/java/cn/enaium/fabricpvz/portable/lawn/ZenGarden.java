@@ -484,38 +484,48 @@ public class ZenGarden {
         }
     }
 
-    /** Ported from src/Lawn/ZenGarden.cpp:407-453 (ZenGarden::GetPlantSellPrice). */
+    /**
+     * Ported from src/Lawn/ZenGarden.cpp:407-453 (ZenGarden::GetPlantSellPrice).
+     *
+     * <p>PORT-NOTE (deviation): the upstream rewrite's table reads 150/200/250/300 and
+     * 150/300/500/800/1000 - a transcription slip that dropped the retail ×10 (the rewrite pays
+     * {@code AddCoins(aPrice)} straight off that table). The retail game pays ten times these
+     * amounts (3000 for a full marigold, 8000 for a full regular plant, 10000 for an aquatic or
+     * nocturnal one), which is what makes the zen-garden economy work at all: a 2500-coin sprout
+     * would otherwise be a guaranteed loss. The table below is the retail values, so Dave's
+     * dialogue and the payout agree.
+     */
     public int getPlantSellPrice(Plant thePlant) {
         PottedPlant aPottedPlant = pottedPlantFromIndex(thePlant.mPottedPlantIndex);
         if (aPottedPlant.mSeedType == SeedType.SEED_MARIGOLD) {
             if (aPottedPlant.mPlantAge == PottedPlantAge.PLANTAGE_SPROUT) {
-                return 150;
+                return 1500;
             }
             if (aPottedPlant.mPlantAge == PottedPlantAge.PLANTAGE_SMALL) {
-                return 200;
+                return 2000;
             }
             if (aPottedPlant.mPlantAge == PottedPlantAge.PLANTAGE_MEDIUM) {
-                return 250;
+                return 2500;
             }
             if (aPottedPlant.mPlantAge == PottedPlantAge.PLANTAGE_FULL) {
-                return 300;
+                return 3000;
             }
             zenAssert(false, "unexpected marigold plant age");
         }
         if (aPottedPlant.mPlantAge == PottedPlantAge.PLANTAGE_SPROUT) {
-            return 150;
+            return 1500;
         }
         if (aPottedPlant.mPlantAge == PottedPlantAge.PLANTAGE_SMALL) {
-            return 300;
+            return 3000;
         }
         if (aPottedPlant.mPlantAge == PottedPlantAge.PLANTAGE_MEDIUM) {
-            return 500;
+            return 5000;
         }
         if (aPottedPlant.mPlantAge == PottedPlantAge.PLANTAGE_FULL) {
             if (Plant.isNocturnal(aPottedPlant.mSeedType) || Plant.isAquatic(aPottedPlant.mSeedType)) {
-                return 1000;
+                return 10000;
             }
-            return 800;
+            return 8000;
         }
         throw new IllegalStateException("unreachable");
     }

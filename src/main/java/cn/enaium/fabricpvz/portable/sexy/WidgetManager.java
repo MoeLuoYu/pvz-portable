@@ -517,10 +517,19 @@ public class WidgetManager extends WidgetContainer {
 
         mCurG = null;
 
-        // The frame is complete (widgets, deferred overlays and a self-drawn cursor are all on the
-        // canvas): hand it to the window. No-ops for a backend that draws into the window directly; with
-        // a high-density window this is where the canvas is scaled into the drawable, and it must run
-        // every frame unconditionally (gating it on dirtiness would leave the first frame invisible).
+        // The debug overlay draws here - after every widget, before the composite: drawing it any
+        // later would miss a canvas that is scaled into the window drawable at the composite (the
+        // overlay would trail one composite behind and never show on a scaled window). Skipped when
+        // nothing was dirty: the canvas keeps the last drawn overlay.
+        if (drewStuff && mApp != null && mApp.mShowFPS) {
+            mApp.drawDebugOverlay(aScrG);
+        }
+
+        // The frame is complete (widgets, deferred overlays, a self-drawn cursor and the debug
+        // overlay are all on the canvas): hand it to the window. No-ops for a backend that draws into
+        // the window directly; with a high-density window this is where the canvas is scaled into the
+        // drawable, and it must run every frame unconditionally (gating it on dirtiness would leave
+        // the first frame invisible).
         if (mApp != null && mApp.mRendererBackend != null) {
             mApp.mRendererBackend.compositeToOutput();
         }

@@ -88,6 +88,10 @@ cd ../PvZ-Portable && ./gradlew test
 
 可写数据（存档、注册表模拟、资源缓存）写入 `-savedir=<path>`，默认为各平台标准的应用数据目录。因此直接从项目目录运行游戏，会在源码旁边创建 `userdata/` 和 `cache64/`。
 
+运行日志走 log4j2（控制台 + 文件双路），写在**游戏目录**的 `logs/latest.log`——启动器游戏目录（版本 json 传 `-Dpvz.gameDir=${game_directory}`）、`./gradlew run` 的 `run/logs/`、未设置该属性的解压发行包则是解压根目录的 `logs/`。每次启动把上一份 `latest.log` 归档为 `logs/<日期>-<序号>.log.gz`（跨天同样归档，最多保留 1000 份），文件格式为纯文本的 MC 风格行 `[日期 时间] [线程/级别]: [logger] 消息`（控制台带 Loom 风格的 ANSI 着色，可用 `-Dfabric.log.disableAnsi=true` 关闭），日志级别可用 `-Dfabric.log.level=<级别>` 调整。
+
+未捕获异常会像 Minecraft 一样产出崩溃报告：默认未捕获异常处理器把 `crash-reports/crash-<日期>_<时间>-client.txt` 写进游戏目录，报告为 MC 形状——第二行是每次随机的"一言"（取自游戏自己的**智慧树语录**，即用户提供的注释池），随后是 Time/Description、完整堆栈、`-- Head --` 与 `-- System Details --`（游戏版本、OS、Java、VM、MC 式内存三段、CPU、JVM Flags、Fabric Loader 版本、模组数、渲染后端、窗口尺寸）；写完报告即退出（MC 同款 exit code）。
+
 ## 发行包（`distZip`）
 
 ```bash
@@ -291,6 +295,15 @@ gh release create "$VERSION" "build/distributions/pvz-portable-$VERSION.zip" \
 | 编译缓存键 | 缓存路径按传入的 XML 路径原样拼接（`Definition.cpp:560-569`；游戏自身只传资源相对名） | 缓存键经 `CompiledCache.normalizeCacheKey` 归一（折叠分隔符、剥资源根/盘符前缀；相对名原样不动） | 上游在 POSIX 下把绝对路径拼进相对缓存目录得到的是合法（虽然怪异的）文件名，Windows 上盘符冒号会让编译缓存直接抛 `InvalidPathException`——测试夹具与散文件场景会传入绝对路径。键只需稳定且合法，读写两侧经同一方法保持对称 |
 | 档案与演示文件的字符串编码 | `DataWriter::WriteString` 写 `std::string` 的原始字节（上游内容约定为 UTF-8，`DataSync.cpp:394-399`） | `DataWriter.writeString`/`DataReader.readString`/`Buffer` 的字符串编解码改用 UTF-8 | 移植版此前用 ISO_8859_1——ASCII 时与上游碰巧一致，任何 CJK 字符却在**写入时**就被替换成 `?`（0x3F）：中文玩家名在 `users.dat` 里存成一排问号，与字幕编码是同一族缺陷。UTF-8 与上游逐字节对齐；演示录制（demo）缓冲由同一构建写读，编解码切换自洽 |
 | 档案名的首字母大写 | 名字输入控件自动大写第一个键入的字母（`LawnCommon.cpp` 的 AutoCapChar——原版档案名都因此大写开头） | 新建档案对话框的名字字段关闭自动大写，名字完全按所打内容保存（`NewUserDialog`） | 用户要求档案名原样保留小写字母；秘籍输入等其他 `LawnEditWidget` 用途保持上游行为 |
+| F11 全屏切换 | 没有 F11 绑定，只有框架层的 Alt+Enter 切换全屏 | `KEY_DOWN` 分发处新增 F11 分支，与 Alt+Enter 走同一条 `switchScreenMode` 路径（自动重复不触发；按键不下发到控件） | 用户要求的快速全屏切换；复用同一路径让打开中的选项对话框复选框（`LawnApp.SwitchScreenMode`）与退出时持久化的 `ScreenMode` 自动保持一致 |
+| 主菜单左下角信息字幕 | 无 | 左下角两行小字（画在选择器覆盖层之上，免被草丛/墓碑遮挡）：`模组已载入 N 个`（游戏本体计 1，加上 loader 实际载入的顶层模组——排除 builtin、loader 自身与 jar-in-jar 子模块；文本优先取字符串表 `[MODS_HAS_LOADED]` 的 `{COUNT}` 模板，缺键回落内置英文模板 `Mods loaded: {COUNT}`，与其他代码内默认字符串同语言）与 `Plants vs. Zombies GOTY <版本>/Fabric <Loader 版本>`（Loader 版本由 provider 从 `fabricloader` 容器发布；裸跑无 loader 时只显示 `Fabric`） | 用户要求的运行环境可见性；游戏源码保持 Fabric-free，环境事实经系统属性（JVM 全局，规避 provider 与游戏分属两个类加载器的静态字段分裂）进入游戏侧 |
+| 失焦自动暂停 | `LawnApp::LostFocus` 无条件暂停关卡、`GotFocus` 无条件恢复（LawnApp.cpp:299-311） | 改为偏好开关（选项菜单 3D 加速行左列的复选框——文字左、复选框右，与其他行同构；字符串键 `[OPTIONS_AUTO_PAUSE]`，注册表值 `AutoPause`，默认开）：开启时离开窗口焦点打开**与按 Space 相同的暂停对话框**（报纸僵尸 + "继续游戏"按钮，经 `canPauseNow` 同款门控），恢复由玩家点按钮结束；同时联动框架既有的 `mMuteOnLostFocus` 把全部音乐与音效静音（覆盖主菜单等无关卡可暂停的场景），回焦恢复音量；关闭时保持本移植版此前的"不暂停、不静音"行为 | 用户要求的可配置行为；裸 `Board.pause` 只冻结画面没有暂停界面，用户反馈后改为复用 Space 的对话框暂停——生命周期归对话框所有，回焦不自动恢复；音频静音经框架计数式 mute（与用户手动静音互不干扰，注册表 `Muted` 值只反映手动部分） |
+| F3 调试信息 | `mShowFPS` 仅由命令行设置，`FPSDrawCoords` 在上游即为空桩 | F3 键切换调试覆盖层（学习 MC F3 的双栏布局）：左上角 fps/每帧 update 与 draw 耗时（nanoTime 滚动 1 秒窗统计）/3D 加速与 vsync/堆内存与分配速率（`ThreadMXBean`）；右上角游戏版本/渲染后端名（SDL renderer 名 + 画布→drawable 尺寸）/窗口与像素密度/Java/OS/CPU（按平台探测：Windows 注册表、Linux /proc/cpuinfo、macOS sysctl）/Fabric Loader 版本/模组数。选项菜单自动暂停下方有持久开关（`[OPTIONS_DEBUG_INFO]`，注册表 `DebugInfo`，默认关），F3 运行时切换同一标志；文字绘制在所有 widget 之上（PICO129 + 阴影） | 用户要求参照 MC F3 显示运行信息；框架只拥有标志位、F3 分发与每帧绘制钩子（`drawDebugOverlay`），内容由游戏侧填充，分层不变；文字为代码内英文默认（与其他代码内字符串对齐） |
+| 启动画面 | 启动全程黑屏：窗口创建后到 LoaderBar 资源载入完成前什么都没有 | `makeWindow` 末尾（窗口与画布刚就绪）经 `drawBootSplashOnce` 钩子立即绘制并 present 一次 "Made with Fabric" 启动画面，`TitleScreen` 的两个预加载黑填充分支（首绘等待与 LoaderBar 载入期）继续绘制同一画面；图片随 jar 发布（`/pvzp/loading.jpg`，不经 pak——它存在的意义就是 pak 还没打开），ImageIO 解码后 cover 缩放居中裁切到画布尺寸并缓存；PopCap/合作商 logo 阶段保持零售内容 | 用户要求消除启动等待的黑屏（第一次反馈后把时机从 TitleScreen 提前到窗口创建）；资源缺失/解码失败时回落上游黑填充分支；测试桩画布（非 MemoryImage）自动跳过 |
+| 花园出售植物价格 | 出售表为 150/200/250/300 与 150/300/500/800/1000（重写版转录丢失零售 ×10，`AddCoins` 直付表值——2500 买的金盏花苗只能卖 150，经济倒挂） | 出售表按零售实付 ×10：苗 1500、小 2000/3000、中 2500/5000、成株 3000/5000/8000（水生与夜行 10000），戴夫对话与到账一致 | 上游 C++ 重写版自身携带的转录错误（社区反馈核对零售行为）；移植版以零售为准 |
+| 舞王掉臂随召唤重现 | 掉臂隐藏 `Zombie_disco_outerarm_lower` + `Zombie_disco_outerhand_point`——但补丁后零售版的舞王 reanim 没有 `Zombie_disco_*` track（手臂为通用 `Zombie_outerarm_*` 名），隐藏是空操作：手臂从未消失，召唤切换指点动作时"重新出现" | 按 reanim 实有 track 隐藏：`Zombie_outerarm_lower` + `Zombie_outerarm_hand`（前缀） | 上游重写基于未打补丁时代的 track 名；移植版资产为补丁后版本，两者错位 |
+| 伴舞掉臂残留手 | 掉臂隐藏 `Zombie_disco_outerhand_point`——伴舞 reanim 的手 track 实为 `Zombie_disco_outerhand`（无 `_point`），掉臂后残留一只浮空的手 | 隐藏实有的 `Zombie_disco_outerhand` | 同上，track 名错位 |
+| 伴舞掉落后头颅缩小 | 掉落头颅粒子缩放 = 粒子定义基础 0.8 × 身体缩放 0.8 = 0.64，明显小于刚脱离的挂头（0.8），社区反馈为"缩小成一半" | 替换头图分支内将粒子缩放补偿为 1.0，掉落头与挂头等大 | 粒子基础缩放与身体缩放的二次叠加；替换头图本身已是身体尺寸，无需再缩 |
 
 ## 开发任务
 

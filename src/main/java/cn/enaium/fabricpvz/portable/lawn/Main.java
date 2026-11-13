@@ -49,5 +49,16 @@ public final class Main {
 
         // Upstream: gExtractResourcesByName = Sexy::ExtractResourcesByName;
         cn.enaium.fabricpvz.portable.pvzp.PvzpResourceManager.gExtractResourcesByName = Resources::extractResourcesByName;
+
+        // A port addition (after Minecraft): an uncaught exception on any thread writes a
+        // crash-reports/crash-<date>_<time>-client.txt file into the game directory, logs where it
+        // went, and exits - the player hands the file over instead of a black window and a shrug.
+        Thread.setDefaultUncaughtExceptionHandler((theThread, theThrowable) -> {
+            java.nio.file.Path aReport =
+                    cn.enaium.fabricpvz.portable.pvzp.CrashReport.write("Unexpected error", theThrowable, theThread);
+            cn.enaium.fabricpvz.portable.sexy.Common.logErrorLn(
+                    "The game crashed; report written to '{}'", aReport.toString());
+            System.exit(-1);
+        });
     }
 }

@@ -49,6 +49,8 @@ public final class SdlRenderer implements RendererBackend, AutoCloseable {
 
     private final long mRenderer;
     private final boolean mSoftware;
+    /** Cached {@link #rendererName()} (the SDL query allocates; the overlay asks every frame). */
+    private String mName;
 
     private final SDL_Rect mClip = SDL_Rect.malloc();
     private final SDL_Rect mReadRect = SDL_Rect.malloc();
@@ -125,6 +127,15 @@ public final class SdlRenderer implements RendererBackend, AutoCloseable {
         this.mRenderer = renderer;
         this.mSoftware = software;
         this.mWindow = window;
+    }
+
+    @Override
+    public String rendererName() {
+        if (mName == null) {
+            String aName = mSoftware ? "software" : SDLRender.SDL_GetRendererName(mRenderer);
+            mName = aName == null || aName.isEmpty() ? "sdl" : aName;
+        }
+        return mName;
     }
 
     /** Creates a GPU-backed renderer for a window. */

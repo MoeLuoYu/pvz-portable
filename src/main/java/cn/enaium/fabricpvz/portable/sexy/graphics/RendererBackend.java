@@ -51,6 +51,14 @@ public interface RendererBackend {
         return renderOutputHeight();
     }
 
+    /**
+     * The backend's display name for the debug overlay ({@code "opengl"}, {@code "direct3d"},
+     * {@code "metal"}, {@code "software"} for the SDL renderer); empty when the backend has no name.
+     */
+    default String rendererName() {
+        return "";
+    }
+
     /** Flip flags for {@link #drawTexture}. */
     int FLIP_NONE = 0;
     int FLIP_HORIZONTAL = 1;

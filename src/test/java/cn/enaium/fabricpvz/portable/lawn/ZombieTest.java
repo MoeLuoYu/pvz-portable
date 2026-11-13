@@ -21,6 +21,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Optional;
+
 import cn.enaium.fabricpvz.portable.pvzp.reanim.Reanimation;
 import cn.enaium.fabricpvz.portable.pvzp.TestAssets;
 import cn.enaium.fabricpvz.portable.sexy.Color;
@@ -102,6 +107,32 @@ class ZombieTest {
         Board board = new Board(newAdventureApp());
         board.initLevel();
         return board;
+    }
+
+    /**
+     * A board on the fully loaded real app ({@link ScreenResourceLoadingTest#boot}). The
+     * requireAssets tests exercise the reanim/particle-driven paths - drawing real track frames,
+     * dropping a head off a real {@code anim_head1} track - which the stub tracks of
+     * {@code newBoard()} cannot serve: they look loaded but carry no frames or transforms, so a
+     * draw emitted no blits and {@code getTrackPosition} indexed an empty array.
+     */
+    static Board newRealBoard(java.nio.file.Path theSaveDir, java.nio.file.Path theResourceRoot)
+            throws Exception {
+        LawnApp app = ScreenResourceLoadingTest.boot(theSaveDir, theResourceRoot);
+        try {
+            // The stub fixture's equivalent of newAdventureApp's SCENE_PLAYING: without it the
+            // zombies' update() is a no-op (the doUpdate gate skips everything but the scene's own
+            // boot states) and a death animation never advances.
+            app.mGameScene = GameScenes.SCENE_PLAYING;
+            Common.sRand(0x5EED);
+            Board board = new Board(app);
+            board.initLevel();
+            return board;
+        } catch (Exception anException) {
+            app.shutdown();
+            LawnApp.gLawnApp = null;
+            throw anException;
+        }
     }
 
     private static void requireAssets() {
@@ -676,26 +707,33 @@ class ZombieTest {
     }
 
     @Test
-    void lethalDamageKillsAndTheBoardCleansTheZombieUp() {
-        requireAssets();
-        Board board = newBoard();
+    void lethalDamageKillsAndTheBoardCleansTheZombieUp(@org.junit.jupiter.api.io.TempDir java.nio.file.Path theTempDir)
+            throws Exception {
+        Optional<Path> aRoot = TestAssets.resourceRoot();
+        Assumptions.assumeTrue(aRoot.isPresent(), "retail assets required for the head-drop path");
+        Board board = newRealBoard(Files.createDirectories(theTempDir.resolve("savedata")), aRoot.get());
+        LawnApp app = board.mApp;
+        try {
+            Zombie z = board.addZombieInRow(ZombieType.ZOMBIE_NORMAL, 2, 0);
+            assertNotNull(z);
+            int sizeBefore = board.mZombies.mSize;
 
-        Zombie z = board.addZombieInRow(ZombieType.ZOMBIE_NORMAL, 2, 0);
-        assertNotNull(z);
-        int sizeBefore = board.mZombies.mSize;
+            // Zombie.cpp:7989 takeDamage(1800, 9) is the "instant kill" idiom (bit0 + bit4).
+            z.takeDamage(1800, 9);
+            assertTrue(z.isDeadOrDying(), "the hit must put the zombie into a terminal phase");
+            assertTrue(z.mBodyHealth <= 0);
 
-        // Zombie.cpp:7989 takeDamage(1800, 9) is the "instant kill" idiom (bit0 + bit4).
-        z.takeDamage(1800, 9);
-        assertTrue(z.isDeadOrDying(), "the hit must put the zombie into a terminal phase");
-        assertTrue(z.mBodyHealth <= 0);
+            for (int i = 0; i < 600 && !z.mDead; i++) {
+                z.update();
+            }
+            assertTrue(z.mDead, "the death animation ends in DieNoLoot/DieWithLoot (Zombie.cpp:8900-9030)");
 
-        for (int i = 0; i < 600 && !z.mDead; i++) {
-            z.update();
+            board.processDeleteQueue();
+            assertTrue(board.mZombies.mSize < sizeBefore, "ProcessDeleteQueue frees mDead zombies");
+        } finally {
+            app.shutdown();
+            LawnApp.gLawnApp = null;
         }
-        assertTrue(z.mDead, "the death animation ends in DieNoLoot/DieWithLoot (Zombie.cpp:8900-9030)");
-
-        board.processDeleteQueue();
-        assertTrue(board.mZombies.mSize < sizeBefore, "ProcessDeleteQueue frees mDead zombies");
     }
 
     @Test
@@ -720,35 +758,45 @@ class ZombieTest {
     }
 
     @Test
-    void drawRendersReanimFramesForSeveralPhases() {
-        requireAssets();
-        Board board = newBoard();
+    void drawRendersReanimFramesForSeveralPhases(@org.junit.jupiter.api.io.TempDir java.nio.file.Path theTempDir)
+            throws Exception {
+        Optional<Path> aRoot = TestAssets.resourceRoot();
+        Assumptions.assumeTrue(aRoot.isPresent(), "retail assets required for the reanimation-driven draw");
+        LawnApp app = ScreenResourceLoadingTest.boot(
+                Files.createDirectories(theTempDir.resolve("savedata")), aRoot.get());
+        try {
+            Board board = new Board(app);
+            board.initLevel();
 
-        int[] phases = { ZombiePhase.PHASE_ZOMBIE_NORMAL, ZombiePhase.PHASE_ZOMBIE_NORMAL,
-                ZombiePhase.PHASE_DIGGER_TUNNELING, ZombiePhase.PHASE_POGO_BOUNCING,
-                ZombiePhase.PHASE_POLEVAULTER_PRE_VAULT, ZombiePhase.PHASE_BALLOON_FLYING };
-        int[] types = { ZombieType.ZOMBIE_NORMAL, ZombieType.ZOMBIE_TRAFFIC_CONE, ZombieType.ZOMBIE_DIGGER,
-                ZombieType.ZOMBIE_POGO, ZombieType.ZOMBIE_POLEVAULTER, ZombieType.ZOMBIE_BALLOON };
+            int[] phases = { ZombiePhase.PHASE_ZOMBIE_NORMAL, ZombiePhase.PHASE_ZOMBIE_NORMAL,
+                    ZombiePhase.PHASE_DIGGER_TUNNELING, ZombiePhase.PHASE_POGO_BOUNCING,
+                    ZombiePhase.PHASE_POLEVAULTER_PRE_VAULT, ZombiePhase.PHASE_BALLOON_FLYING };
+            int[] types = { ZombieType.ZOMBIE_NORMAL, ZombieType.ZOMBIE_TRAFFIC_CONE, ZombieType.ZOMBIE_DIGGER,
+                    ZombieType.ZOMBIE_POGO, ZombieType.ZOMBIE_POLEVAULTER, ZombieType.ZOMBIE_BALLOON };
 
-        for (int i = 0; i < types.length; i++) {
-            Zombie z = init(board, types[i]);
-            z.mZombiePhase = phases[i];
-            z.mPosX = 400.0f;
-            z.mPosY = 200.0f;
-            z.mX = 400;
-            z.mY = 200;
+            for (int i = 0; i < types.length; i++) {
+                Zombie z = init(board, types[i]);
+                z.mZombiePhase = phases[i];
+                z.mPosX = 400.0f;
+                z.mPosY = 200.0f;
+                z.mX = 400;
+                z.mY = 200;
 
-            ZombieDrawPosition drawPos = z.getDrawPos();
-            assertNotNull(drawPos);
-            assertTrue(drawPos.mClipHeight >= Zombie.CLIP_HEIGHT_OFF && drawPos.mClipHeight <= 120.0f,
-                    "clip height must stay inside the upstream -200..120 range (Zombie.cpp:71-72)");
+                ZombieDrawPosition drawPos = z.getDrawPos();
+                assertNotNull(drawPos);
+                assertTrue(drawPos.mClipHeight >= Zombie.CLIP_HEIGHT_OFF && drawPos.mClipHeight <= 120.0f,
+                        "clip height must stay inside the upstream -200..120 range (Zombie.cpp:71-72)");
 
-            RecordingImage target = new RecordingImage(800, 600);
-            Graphics g = new Graphics(target);
-            z.draw(g);
-            assertTrue(target.mDrawCount > 0,
-                    "Draw() must emit reanim/attachment blits for " + ZombiePhase.class.getSimpleName() + " phase "
-                            + phases[i]);
+                RecordingImage target = new RecordingImage(800, 600);
+                Graphics g = new Graphics(target);
+                z.draw(g);
+                assertTrue(target.mDrawCount > 0,
+                        "Draw() must emit reanim/attachment blits for " + ZombiePhase.class.getSimpleName()
+                                + " phase " + phases[i]);
+            }
+        } finally {
+            app.shutdown();
+            LawnApp.gLawnApp = null;
         }
     }
 

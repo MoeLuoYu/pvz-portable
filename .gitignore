@@ -59,3 +59,10 @@ properties/
 /pvz-portable-*/
 # A machine-specific convenience launcher (hard-coded JDK path, local asset layout)
 /启动游戏.bat
+/loading.jpg
+/MC F3左上角数据.png
+/MC F3右上角数据.png
+/注释池.txt
+/crash-2023-08-14_20.02.39-client.txt
+/logs/
+run/logs/

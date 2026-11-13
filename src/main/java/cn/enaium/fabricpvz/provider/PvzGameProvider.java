@@ -17,11 +17,14 @@ import java.util.List;
 import java.util.Set;
 import java.util.zip.ZipFile;
 
+import cn.enaium.fabricpvz.portable.pvzp.RuntimeEnvironment;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.loader.api.FabricLoader;
+import net.fabricmc.loader.api.ModContainer;
 import net.fabricmc.loader.api.metadata.ModMetadata;
+import net.fabricmc.loader.api.metadata.ModOrigin;
 import net.fabricmc.loader.impl.game.GameProvider;
 import net.fabricmc.loader.impl.game.patch.GameTransformer;
 import net.fabricmc.loader.impl.launch.FabricLauncher;
@@ -78,6 +81,8 @@ public final class PvzGameProvider implements GameProvider {
 
     /** Mod id of the game itself, used by mods in their {@code depends} block. */
     public static final String GAME_ID = "pvz-portable";
+    /** Mod id of Fabric Loader itself, which carries a regular {@code fabric.mod.json}. */
+    public static final String LOADER_MOD_ID = "fabricloader";
     /** Human readable game name, shown by the loader at startup. */
     public static final String GAME_NAME = "PvZ Portable";
     /**
@@ -421,6 +426,7 @@ public final class PvzGameProvider implements GameProvider {
     @Override
     public void launch(ClassLoader loader) {
         FabricLoader fabricLoader = FabricLoader.getInstance();
+        publishRuntimeEnvironment(fabricLoader);
         fabricLoader.invokeEntrypoints("main", ModInitializer.class, ModInitializer::onInitialize);
 
         if (fabricLoader.getEnvironmentType() == EnvType.CLIENT) {
@@ -470,5 +476,40 @@ public final class PvzGameProvider implements GameProvider {
         }
 
         return null;
+    }
+
+    /**
+     * Hands the game the runtime facts it shows on the main menu but must not ask the loader for
+     * itself (the game's sources stay Fabric-free): how many top-level mods the loader loaded, and
+     * the loader's own version for the F3 debug overlay. The launcher brand needs no publishing -
+     * it is a plain system property the version json carries.
+     *
+     * <p>"Top-level" excludes the loader's builtins ({@code minecraft}, {@code java}, ... - their
+     * metadata type is {@code builtin}), the loader itself (which carries a regular
+     * {@code fabric.mod.json} and would otherwise be the +1 the caption shows on an empty mods
+     * directory), and the jar-in-jar submodules nested inside another mod's jar (an aggregate like
+     * this workspace's {@code fabric-api} is one jar on disk and therefore one mod on the caption,
+     * not its ~20 nested feature modules).
+     */
+    private static void publishRuntimeEnvironment(FabricLoader fabricLoader) {
+        int aTopLevelMods = 0;
+
+        for (ModContainer aMod : fabricLoader.getAllMods()) {
+            // The loader itself is recognized by id, not by metadata type: unlike the game (a
+            // builtin mod) it carries a regular fabric.mod.json, so its type is not "builtin".
+            if (aMod.getMetadata().getId().equals(LOADER_MOD_ID)) {
+                RuntimeEnvironment.setLoaderVersion(aMod.getMetadata().getVersion().getFriendlyString());
+                continue;
+            }
+            if (aMod.getMetadata().getType().equals("builtin")) {
+                continue;
+            }
+            if (aMod.getOrigin().getKind() == ModOrigin.Kind.NESTED) {
+                continue;
+            }
+            aTopLevelMods++;
+        }
+
+        RuntimeEnvironment.setLoadedMods(aTopLevelMods);
     }
 }

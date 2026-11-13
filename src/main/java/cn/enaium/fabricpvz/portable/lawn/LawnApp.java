@@ -43,6 +43,7 @@ import cn.enaium.fabricpvz.portable.lawn.widget.ZombatarTOS;
 import cn.enaium.fabricpvz.portable.pvzp.PvzpCommon;
 import cn.enaium.fabricpvz.portable.pvzp.PvzpResourceManager;
 import cn.enaium.fabricpvz.portable.pvzp.PvzpStringFile;
+import cn.enaium.fabricpvz.portable.pvzp.RuntimeEnvironment;
 import cn.enaium.fabricpvz.portable.pvzp.fx.FilterEffect;
 import cn.enaium.fabricpvz.portable.pvzp.fx.PvzpFoley;
 import cn.enaium.fabricpvz.portable.pvzp.fx.PvzpParticleDefinitions;
@@ -64,6 +65,7 @@ import cn.enaium.fabricpvz.portable.sexy.SexyApp;
 import cn.enaium.fabricpvz.portable.sexy.graphics.Font;
 import cn.enaium.fabricpvz.portable.sexy.graphics.Graphics;
 import cn.enaium.fabricpvz.portable.sexy.graphics.Image;
+import cn.enaium.fabricpvz.portable.sexy.graphics.MemoryImage;
 
 /**
  * Ported from src/LawnApp.h:67 and src/LawnApp.cpp.
@@ -135,6 +137,13 @@ public class LawnApp extends SexyApp {
     public int mMaxPlays;
     public int mMaxTime;
     public boolean mEasyPlantingCheat;
+    /**
+     * The auto-pause preference (a port addition; upstream always paused on focus loss,
+     * LawnApp.cpp:299-311): when on, leaving the window pauses the board, when off the game keeps
+     * running without focus. Toggled by the options dialog, persisted as the {@code AutoPause}
+     * registry value.
+     */
+    public boolean mAutoPause;
     public PoolEffect mPoolEffect;
     public ZenGarden mZenGarden;
     public EffectSystem mEffectSystem;
@@ -235,6 +244,12 @@ public class LawnApp extends SexyApp {
         mFirstTimeGameSelector = true;
         mGameMode = GameMode.GAMEMODE_ADVENTURE;
         mEasyPlantingCheat = false;
+        // The original game always paused on focus loss; the preference starts in that state. The
+        // framework's mute-on-lost-focus rides along: with the auto pause on, leaving the window
+        // also silences every music track and sound (including where the pause dialog itself does
+        // not apply - the main menu has no board to pause).
+        mAutoPause = true;
+        mMuteOnLostFocus = true;
         mLoadingZombiesThreadCompleted = true;
         mGamesPlayed = 0;
         mMaxExecutions = 0;
@@ -466,14 +481,257 @@ public class LawnApp extends SexyApp {
         }
     }
 
-    // LawnApp::GotFocus (LawnApp.cpp:299)
+    /**
+     * The auto-pause leaves resume control to the player: the pause is the same modal pause dialog
+     * the Space key opens (newspaper zombie, "Resume Game"), so it ends the way that dialog ends -
+     * by the player clicking its button. Nothing to do on focus regain; upstream's unconditional
+     * resume (LawnApp.cpp:299) has no equivalent here.
+     */
     @Override
     public void gotFocus() {
     }
 
-    // LawnApp::LostFocus (LawnApp.cpp:303)
+    /**
+     * The auto-pause preference: leaving the window opens the very same pause dialog the Space key
+     * opens ({@link #doPauseDialog} - the newspaper-zombie pause with the save-on-pause), instead of
+     * upstream's silent board pause (LawnApp.cpp:303). The gates are {@link #canPauseNow}, the same
+     * ones the Space path respects: no pause dialog over the seed chooser, a Crazy Dave speech, zen
+     * garden / tree of wisdom, or another open dialog (whose own modal pause already holds). No
+     * pause sound plays - the player is leaving, not asking for feedback.
+     */
     @Override
     public void lostFocus() {
+        if (mAutoPause && canPauseNow()) {
+            doPauseDialog();
+        }
+    }
+
+    // =========================================================================
+    // Boot splash (a port addition): the "Made with Fabric" image ships as a jar
+    // resource and covers the screen while the retail pak is still loading -
+    // upstream (and this port, until now) showed a black window for that whole
+    // wait. TitleScreen draws it in its pre-pak states.
+    // =========================================================================
+
+    /** The decoded, canvas-sized splash (lazy; null until first drawn, then cached). */
+    public MemoryImage mBootSplashImage;
+
+    /**
+     * Draws the boot splash over the whole screen; falls back to the upstream black fill when the
+     * resource is missing or undecodable. The pak cannot be consulted here - the splash exists
+     * exactly because nothing from it is loaded yet - so the image rides in the jar.
+     */
+    public void drawBootSplash(Graphics g) {
+        if (mBootSplashImage == null) {
+            mBootSplashImage = loadBootSplash();
+        }
+        if (mBootSplashImage != null) {
+            g.drawImage(mBootSplashImage, 0, 0);
+        } else {
+            g.setColor(Color.Black);
+            g.fillRect(0, 0, mWidth, mHeight);
+        }
+    }
+
+    /** Paints the splash onto the fresh window canvas and presents it once ({@code makeWindow});
+     * {@link #drawBootSplash} keeps covering the screen from TitleScreen while loading continues.
+     * The canvas must be a real {@link MemoryImage} (the framework screen image is; test doubles
+     * are not), and a renderer must exist to present through. */
+    @Override
+    protected void drawBootSplashOnce() {
+        if (mRendererBackend == null
+                || !(mWidgetManager != null && mWidgetManager.mImage instanceof MemoryImage aCanvas)) {
+            return;
+        }
+
+        drawBootSplash(new Graphics(aCanvas));
+        redraw(null);
+    }
+
+    /** Decodes {@code /pvzp/loading.jpg} and cover-scales it into a canvas-sized image. */
+    private MemoryImage loadBootSplash() {
+        try (java.io.InputStream in = LawnApp.class.getResourceAsStream("/pvzp/loading.jpg")) {
+            if (in == null) {
+                return null;
+            }
+
+            java.awt.image.BufferedImage aLoaded = javax.imageio.ImageIO.read(in);
+            if (aLoaded == null) {
+                return null;
+            }
+
+            // Cover-scale: fill the canvas completely, cropping the overflow centred - the same
+            // treatment Minecraft's splash applies.
+            int aWidth = mWidth;
+            int aHeight = mHeight;
+            java.awt.image.BufferedImage aScaled = new java.awt.image.BufferedImage(
+                    aWidth, aHeight, java.awt.image.BufferedImage.TYPE_INT_RGB);
+            java.awt.Graphics2D aGraphics = aScaled.createGraphics();
+            double aScale = Math.max((double) aWidth / aLoaded.getWidth(),
+                    (double) aHeight / aLoaded.getHeight());
+            int aDrawWidth = (int) Math.round(aLoaded.getWidth() * aScale);
+            int aDrawHeight = (int) Math.round(aLoaded.getHeight() * aScale);
+            aGraphics.drawImage(aLoaded, (aWidth - aDrawWidth) / 2, (aHeight - aDrawHeight) / 2,
+                    aDrawWidth, aDrawHeight, null);
+            aGraphics.dispose();
+
+            MemoryImage anImage = new MemoryImage(null);
+            anImage.setBits(aScaled.getRGB(0, 0, aWidth, aHeight, null, 0, aWidth),
+                    aWidth, aHeight, false);
+            return anImage;
+        } catch (java.io.IOException anException) {
+            return null;
+        }
+    }
+
+    // =========================================================================
+    // F3 debug overlay (a port addition, after Minecraft's F3): fills the
+    // framework's FPSDrawCoords stub (SexyAppBase.drawDebugOverlay) with the
+    // game's own data. Two blocks like the reference: performance and memory in
+    // the top-left corner, identity and environment in the top-right. The text
+    // is English in code, like every other in-code default string.
+    // =========================================================================
+
+    /** The allocation-rate sampler's last sample (bytes, nanotime); 0 time = unset. */
+    private long mLastAllocatedBytes;
+    private long mLastAllocatedTimeNs;
+    /** The last sampled allocation rate in MiB/s; negative when the JVM does not expose it. */
+    private double mAllocatedRateMiBPerSec = -1.0;
+
+    /** {@link #drawDebugOverlay}: the performance and memory block, top-left, left-aligned. */
+    private String[] debugLeftLines() {
+        java.util.List<String> aLines = new java.util.ArrayList<>();
+
+        aLines.add(debugFpsLine(mDebugFps, mDebugUpdateMs, mDebugDrawMs));
+        aLines.add("3D acceleration: " + (is3DAccelerated() ? "on" : "off")
+                + ", vsync: " + (mWaitForVSync ? "on" : "off"));
+
+        Runtime aRuntime = Runtime.getRuntime();
+        long aUsedBytes = aRuntime.totalMemory() - aRuntime.freeMemory();
+        aLines.add(debugMemoryLine(aUsedBytes, aRuntime.totalMemory(), aRuntime.maxMemory()));
+
+        double anAllocRate = sampleAllocatedRateMiBPerSec();
+        if (anAllocRate >= 0) {
+            aLines.add(debugAllocRateLine(anAllocRate));
+        }
+        return aLines.toArray(new String[0]);
+    }
+
+    /** {@link #drawDebugOverlay}: the identity and environment block, top-right, right-aligned. */
+    private String[] debugRightLines() {
+        java.util.List<String> aLines = new java.util.ArrayList<>();
+
+        aLines.add("PvZ Portable GOTY " + mProductVersion);
+
+        if (mRendererBackend != null) {
+            String aName = mRendererBackend.rendererName();
+            if (aName == null || aName.isEmpty()) {
+                aName = "unknown";
+            }
+            aLines.add("Renderer: " + aName
+                    + " (" + mRendererBackend.logicalWidth() + "x" + mRendererBackend.logicalHeight()
+                    + " -> " + mRendererBackend.renderOutputWidth() + "x"
+                    + mRendererBackend.renderOutputHeight() + ")");
+        }
+
+        if (mPlatformBackend != null) {
+            int aWindowWidth = mPlatformBackend.windowWidth();
+            double aDensity = aWindowWidth > 0
+                    ? (double) mPlatformBackend.pixelWidth() / aWindowWidth : 1.0;
+            aLines.add(String.format(java.util.Locale.ROOT, "Display: %dx%d (%.2fx pixel density)",
+                    aWindowWidth, mPlatformBackend.windowHeight(), aDensity));
+        }
+
+        aLines.add("Java: " + System.getProperty("java.version", "?"));
+        aLines.add("OS: " + System.getProperty("os.name", "?") + " "
+                + System.getProperty("os.version", "?") + " (" + System.getProperty("os.arch", "?") + ")");
+
+        // The CPU model comes from each platform in its own way (Windows registry, Linux /proc,
+        // macOS sysctl); without one the architecture is what shows.
+        String aCpuModel = RuntimeEnvironment.cpuModel();
+        aLines.add("CPU: " + Runtime.getRuntime().availableProcessors() + "x"
+                + (aCpuModel.isEmpty() ? " " + System.getProperty("os.arch", "?") : " " + aCpuModel));
+
+        String aLoaderVersion = RuntimeEnvironment.loaderVersion();
+        aLines.add("Fabric Loader: " + (aLoaderVersion.isEmpty() ? "?" : aLoaderVersion));
+        aLines.add("Mods: " + RuntimeEnvironment.totalMods());
+
+        return aLines.toArray(new String[0]);
+    }
+
+    @Override
+    protected void drawDebugOverlay(Graphics g) {
+        Font aFont = Resources.getFontById(Resources.FONT_PICO129_ID);
+        if (aFont == null || aFont.mHeight <= 0) {
+            return;
+        }
+
+        int aLineHeight = aFont.getLineSpacing();
+        int aY = 4 + aFont.getAscent();
+
+        for (String aLine : debugLeftLines()) {
+            g.setFont(aFont);
+            g.setColor(Color.White);
+            g.drawStringShaded(aLine, 4, aY, Color.Black);
+            aY += aLineHeight;
+        }
+
+        aY = 4 + aFont.getAscent();
+        for (String aLine : debugRightLines()) {
+            g.setFont(aFont);
+            g.setColor(Color.White);
+            g.drawStringShaded(aLine, mWidth - 4 - aFont.stringWidth(aLine), aY, Color.Black);
+            aY += aLineHeight;
+        }
+    }
+
+    /** The JVM heap's allocation rate on the game thread, in MiB/s; negative when unavailable. */
+    private double sampleAllocatedRateMiBPerSec() {
+        if (!(java.lang.management.ManagementFactory.getThreadMXBean()
+                instanceof com.sun.management.ThreadMXBean aBean)) {
+            return -1.0;
+        }
+        if (!aBean.isThreadAllocatedMemoryEnabled()) {
+            try {
+                aBean.setThreadAllocatedMemoryEnabled(true);
+            } catch (SecurityException anException) {
+                return -1.0;
+            }
+        }
+
+        long aBytes = aBean.getThreadAllocatedBytes(Thread.currentThread().threadId());
+        if (aBytes < 0) {
+            return -1.0;
+        }
+
+        long aNowNs = System.nanoTime();
+        if (mLastAllocatedTimeNs != 0 && aNowNs > mLastAllocatedTimeNs) {
+            double aSeconds = (aNowNs - mLastAllocatedTimeNs) / 1e9;
+            mAllocatedRateMiBPerSec = Math.max(0.0, aBytes - mLastAllocatedBytes) / 1048576.0 / aSeconds;
+        }
+        mLastAllocatedBytes = aBytes;
+        mLastAllocatedTimeNs = aNowNs;
+        return mAllocatedRateMiBPerSec;
+    }
+
+    /** The overlay's first left line: frame rate and the per-frame update/draw wall times. */
+    static String debugFpsLine(int theFps, double theUpdateMs, double theDrawMs) {
+        return String.format(java.util.Locale.ROOT, "%d fps (update %.1f ms / draw %.1f ms)",
+                theFps, theUpdateMs, theDrawMs);
+    }
+
+    /** The overlay's heap line, MC-style: the used share of the <em>allocated</em> heap, then
+     * used/allocated and the maximum, in MiB. */
+    static String debugMemoryLine(long theUsedBytes, long theAllocatedBytes, long theMaxBytes) {
+        int aUsedPercent = theAllocatedBytes > 0
+                ? (int) Math.round(theUsedBytes * 100.0 / theAllocatedBytes) : 0;
+        return String.format(java.util.Locale.ROOT, "Mem: %d%% %d/%d MiB (max %d MiB)",
+                aUsedPercent, theUsedBytes / 1048576, theAllocatedBytes / 1048576, theMaxBytes / 1048576);
+    }
+
+    /** The overlay's allocation-rate line, in MiB/s. */
+    static String debugAllocRateLine(double theMiBPerSec) {
+        return String.format(java.util.Locale.ROOT, "Alloc rate: %.0f MiB/s", theMiBPerSec);
     }
 
     // LawnApp::WriteToRegistry (LawnApp.cpp:313)
@@ -484,6 +742,11 @@ public class LawnApp extends SexyApp {
             mPlayerInfo.saveDetails();
         }
 
+        // The auto-pause preference, next to the framework's own ScreenMode/WaitForVSync switches.
+        registryWriteBoolean("AutoPause", mAutoPause);
+        // The F3 debug overlay's persisted default (the key toggles it at runtime either way).
+        registryWriteBoolean("DebugInfo", mShowFPS);
+
         super.writeToRegistry();
     }
 
@@ -491,6 +754,17 @@ public class LawnApp extends SexyApp {
     @Override
     public void readFromRegistry() {
         super.readFromRegistry();
+
+        boolean[] aBool = new boolean[1];
+        if (registryReadBoolean("AutoPause", aBool)) {
+            mAutoPause = aBool[0];
+        }
+        // The two preferences travel together: no auto pause also means no focus mute.
+        mMuteOnLostFocus = mAutoPause;
+
+        if (registryReadBoolean("DebugInfo", aBool)) {
+            mShowFPS = aBool[0];
+        }
     }
 
     // LawnApp::WriteCurrentUserConfig (LawnApp.cpp:329)
@@ -1946,6 +2220,16 @@ public class LawnApp extends SexyApp {
         NewOptionsDialog aNewOptionsDialog = (NewOptionsDialog) getDialog(Dialogs.DIALOG_NEWOPTIONS);
         if (aNewOptionsDialog != null) {
             aNewOptionsDialog.mFullscreenCheckbox.setChecked(!mIsWindowed, false);
+        }
+    }
+
+    /** Re-syncs the options dialog's debug-info checkbox after an F3 toggle, the same way
+     * {@link #switchScreenMode} re-syncs the fullscreen checkbox after Alt+Enter / F11. */
+    @Override
+    protected void debugInfoToggled() {
+        NewOptionsDialog aNewOptionsDialog = (NewOptionsDialog) getDialog(Dialogs.DIALOG_NEWOPTIONS);
+        if (aNewOptionsDialog != null) {
+            aNewOptionsDialog.mDebugInfoCheckbox.setChecked(mShowFPS, false);
         }
     }
 

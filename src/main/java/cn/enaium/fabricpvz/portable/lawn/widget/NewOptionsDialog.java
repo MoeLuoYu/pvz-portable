@@ -54,6 +54,10 @@ public class NewOptionsDialog extends Dialog implements SliderListener, Checkbox
     public static final int NewOptionsDialog_SoundVolume = 5;
     public static final int NewOptionsDialog_Fullscreen = 6;
     public static final int NewOptionsDialog_HardwareAcceleration = 7;
+    /** A port addition beyond the upstream enum: the auto-pause checkbox. */
+    public static final int NewOptionsDialog_AutoPause = 8;
+    /** A port addition beyond the upstream enum: the F3 debug-overlay checkbox. */
+    public static final int NewOptionsDialog_DebugInfo = 9;
 
     // NewOptionsDialog.cpp:150-157 — layout table (dialog-local coordinates)
     public static final int MUSIC_SLIDER_X = 199;
@@ -71,10 +75,34 @@ public class NewOptionsDialog extends Dialog implements SliderListener, Checkbox
     public static final int HW_ACCEL_CHECKBOX_WIDTH = 46;
     public static final int HW_ACCEL_CHECKBOX_HEIGHT = 45;
 
+    /**
+     * The auto-pause checkbox sits in the empty left column of the 3D-acceleration row, the same
+     * size and row height as the right-column checkboxes (a port addition, not in upstream). The
+     * label reads as on every other row - text left, checkbox right - so the label is right-aligned
+     * into the checkbox with the same 9px gap the right column uses (283 checkbox / 274 label).
+     * The x is 1.2 checkbox widths right of the column's left edge, as the user tuned it.
+     */
+    public static final int AUTO_PAUSE_CHECKBOX_X = 130 + (int) (1.0 * HW_ACCEL_CHECKBOX_WIDTH);
+    public static final int AUTO_PAUSE_CHECKBOX_Y = HW_ACCEL_CHECKBOX_Y;
+    public static final int AUTO_PAUSE_CHECKBOX_WIDTH = HW_ACCEL_CHECKBOX_WIDTH;
+    public static final int AUTO_PAUSE_CHECKBOX_HEIGHT = HW_ACCEL_CHECKBOX_HEIGHT;
+    /** The auto-pause label's right-alignment anchor: 9px left of its checkbox. */
+    public static final int AUTO_PAUSE_LABEL_X = AUTO_PAUSE_CHECKBOX_X - 9;
+
     public static final int FULLSCREEN_CHECKBOX_X = 284;
     public static final int FULLSCREEN_CHECKBOX_Y = 206;
     public static final int FULLSCREEN_CHECKBOX_WIDTH = 46;
     public static final int FULLSCREEN_CHECKBOX_HEIGHT = 45;
+
+    /**
+     * The debug-overlay checkbox sits in the left column, vertically aligned with the fullscreen
+     * row (a port addition, not in upstream); same column and label style as the auto-pause one.
+     */
+    public static final int DEBUG_INFO_CHECKBOX_X = AUTO_PAUSE_CHECKBOX_X;
+    public static final int DEBUG_INFO_CHECKBOX_Y = FULLSCREEN_CHECKBOX_Y;
+    public static final int DEBUG_INFO_CHECKBOX_WIDTH = AUTO_PAUSE_CHECKBOX_WIDTH;
+    public static final int DEBUG_INFO_CHECKBOX_HEIGHT = AUTO_PAUSE_CHECKBOX_HEIGHT;
+    public static final int DEBUG_INFO_LABEL_X = DEBUG_INFO_CHECKBOX_X - 9;
 
     public static final int ALMANAC_BUTTON_X = 107;
     public static final int ALMANAC_BUTTON_Y = 241;
@@ -105,12 +133,17 @@ public class NewOptionsDialog extends Dialog implements SliderListener, Checkbox
     public static final String OPTION_DLG_CHECKBOX_LABELS_OFFSET_X = "OPTION_DLG_CHECKBOX_LABELS_OFFSET_X";
     public static final String OPTION_DLG_LABEL_FONT_SCALE = "OPTION_DLG_LABEL_FONT_SCALE";
 
+    /** The debug-overlay label shares the fullscreen row's label y (NewOptionsDialog.cpp:186). */
+    public static final int DEBUG_INFO_LABEL_Y = FULLSCREEN_LABEL_Y;
+
     // NewOptionsDialog.h:49-59 (fields)
     public LawnApp mApp;
     public Slider mMusicVolumeSlider;
     public Slider mSfxVolumeSlider;
     public Checkbox mFullscreenCheckbox;
     public Checkbox mHardwareAccelerationCheckbox;
+    public Checkbox mAutoPauseCheckbox;
+    public Checkbox mDebugInfoCheckbox;
     public LawnStoneButton mAlmanacButton;
     public LawnStoneButton mBackToMainButton;
     public LawnStoneButton mRestartButton;
@@ -172,6 +205,8 @@ public class NewOptionsDialog extends Dialog implements SliderListener, Checkbox
 
         mFullscreenCheckbox = LawnCommon.makeNewCheckbox(NewOptionsDialog_Fullscreen, this, !theApp.mIsWindowed);
         mHardwareAccelerationCheckbox = LawnCommon.makeNewCheckbox(NewOptionsDialog_HardwareAcceleration, this, theApp.is3DAccelerated());
+        mAutoPauseCheckbox = LawnCommon.makeNewCheckbox(NewOptionsDialog_AutoPause, this, theApp.mAutoPause);
+        mDebugInfoCheckbox = LawnCommon.makeNewCheckbox(NewOptionsDialog_DebugInfo, this, theApp.mShowFPS);
 
         if (mFromGameSelector) {
             mRestartButton.setVisible(false);
@@ -233,6 +268,8 @@ public class NewOptionsDialog extends Dialog implements SliderListener, Checkbox
         addWidget(mSfxVolumeSlider);
         addWidget(mHardwareAccelerationCheckbox);
         addWidget(mFullscreenCheckbox);
+        addWidget(mAutoPauseCheckbox);
+        addWidget(mDebugInfoCheckbox);
         addWidget(mBackToGameButton);
     }
 
@@ -245,6 +282,8 @@ public class NewOptionsDialog extends Dialog implements SliderListener, Checkbox
         removeWidget(mSfxVolumeSlider);
         removeWidget(mFullscreenCheckbox);
         removeWidget(mHardwareAccelerationCheckbox);
+        removeWidget(mAutoPauseCheckbox);
+        removeWidget(mDebugInfoCheckbox);
         removeWidget(mBackToMainButton);
         removeWidget(mBackToGameButton);
         removeWidget(mRestartButton);
@@ -264,6 +303,10 @@ public class NewOptionsDialog extends Dialog implements SliderListener, Checkbox
         mSfxVolumeSlider.resize(SFX_SLIDER_X, SFX_SLIDER_Y, SFX_SLIDER_WIDTH, SFX_SLIDER_HEIGHT);
         mHardwareAccelerationCheckbox.resize(HW_ACCEL_CHECKBOX_X, HW_ACCEL_CHECKBOX_Y,
                 HW_ACCEL_CHECKBOX_WIDTH, HW_ACCEL_CHECKBOX_HEIGHT);
+        mAutoPauseCheckbox.resize(AUTO_PAUSE_CHECKBOX_X, AUTO_PAUSE_CHECKBOX_Y,
+                AUTO_PAUSE_CHECKBOX_WIDTH, AUTO_PAUSE_CHECKBOX_HEIGHT);
+        mDebugInfoCheckbox.resize(DEBUG_INFO_CHECKBOX_X, DEBUG_INFO_CHECKBOX_Y,
+                DEBUG_INFO_CHECKBOX_WIDTH, DEBUG_INFO_CHECKBOX_HEIGHT);
         mFullscreenCheckbox.resize(FULLSCREEN_CHECKBOX_X, FULLSCREEN_CHECKBOX_Y,
                 FULLSCREEN_CHECKBOX_WIDTH, FULLSCREEN_CHECKBOX_HEIGHT);
         mAlmanacButton.resize(ALMANAC_BUTTON_X, ALMANAC_BUTTON_Y, OPTIONS_BUTTON_WIDTH, OPTIONS_BUTTON_HEIGHT);
@@ -278,6 +321,8 @@ public class NewOptionsDialog extends Dialog implements SliderListener, Checkbox
             mMusicVolumeSlider.mY += FROM_SELECTOR_MUSIC_OFFSET_Y;
             mSfxVolumeSlider.mY += FROM_SELECTOR_SFX_OFFSET_Y;
             mHardwareAccelerationCheckbox.mY += FROM_SELECTOR_HW_ACCEL_OFFSET_Y;
+            mAutoPauseCheckbox.mY += FROM_SELECTOR_HW_ACCEL_OFFSET_Y;
+            mDebugInfoCheckbox.mY += FROM_SELECTOR_FULLSCREEN_OFFSET_Y;
             mFullscreenCheckbox.mY += FROM_SELECTOR_FULLSCREEN_OFFSET_Y;
         }
 
@@ -317,6 +362,13 @@ public class NewOptionsDialog extends Dialog implements SliderListener, Checkbox
                 aFont, aTextColor, DrawStringJustification.DS_ALIGN_RIGHT);
         PvzpCommon.pvzpDrawString(g, mApp.getString("OPTIONS_3D_ACCELERATION", "3D Acceleration"), aCheckboxLabelsX,
                 HW_ACCEL_LABEL_Y + a3DAccelOffset, aFont, aTextColor, DrawStringJustification.DS_ALIGN_RIGHT);
+        // The auto-pause checkbox shares the 3D-acceleration row from the left column; like every
+        // other row, its label sits to the left of the checkbox (right-aligned into it).
+        PvzpCommon.pvzpDrawString(g, mApp.getString("OPTIONS_AUTO_PAUSE", "Auto Pause"), AUTO_PAUSE_LABEL_X,
+                HW_ACCEL_LABEL_Y + a3DAccelOffset, aFont, aTextColor, DrawStringJustification.DS_ALIGN_RIGHT);
+        // The debug-overlay checkbox is aligned with the fullscreen row from the left column.
+        PvzpCommon.pvzpDrawString(g, mApp.getString("OPTIONS_DEBUG_INFO", "Debug Info"), DEBUG_INFO_LABEL_X,
+                DEBUG_INFO_LABEL_Y + aFullScreenOffset, aFont, aTextColor, DrawStringJustification.DS_ALIGN_RIGHT);
         PvzpCommon.pvzpDrawString(g, mApp.getString("OPTIONS_FULL_SCREEN", "Full Screen"), aCheckboxLabelsX,
                 FULLSCREEN_LABEL_Y + aFullScreenOffset, aFont, aTextColor, DrawStringJustification.DS_ALIGN_RIGHT);
         if (aFontScale != 1.0f) {
@@ -362,6 +414,20 @@ public class NewOptionsDialog extends Dialog implements SliderListener, Checkbox
 
                     mFullscreenCheckbox.setChecked(true, false);
                 }
+                break;
+
+            case NewOptionsDialog_AutoPause:
+                // Applied immediately (the flag is read on the next focus change); the framework's
+                // mute-on-lost-focus rides along so leaving the window also silences music and
+                // sound. Persisted with the rest of the registry values when the game exits.
+                mApp.mAutoPause = checked;
+                mApp.mMuteOnLostFocus = checked;
+                break;
+
+            case NewOptionsDialog_DebugInfo:
+                // Applied immediately (the overlay draws or not on the very next frame); F3 toggles
+                // the same flag at runtime, and it is persisted as the DebugInfo registry value.
+                mApp.mShowFPS = checked;
                 break;
 
             case NewOptionsDialog_HardwareAcceleration:

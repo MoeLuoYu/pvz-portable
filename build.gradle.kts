@@ -150,6 +150,9 @@ dependencies {
     // The game's main sources are Fabric-free; its test fixtures are mods, so they compile against
     // the loader (ModInitializer) and query it (FabricLoader facade) when they run.
     testImplementation(libs.fabric.loader)
+    // The log4j2.xml config test reconfigures the live LoggerContext, which is core types
+    // (the backend itself is already on the test runtime class path via the launch stack).
+    testImplementation(libs.log4j.core)
 
     // The fixtures (`src/test/java/.../contentmodfixture/`) import the API's public types, so their
     // *compilation* gets the API's five feature modules from mavenLocal - compile-only, and

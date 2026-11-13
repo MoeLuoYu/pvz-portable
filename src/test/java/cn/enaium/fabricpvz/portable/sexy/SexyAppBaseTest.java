@@ -98,6 +98,7 @@ class SexyAppBaseTest {
             out.dy = anEvent.dy;
             out.button = anEvent.button;
             out.keyCode = anEvent.keyCode;
+            out.repeat = anEvent.repeat;
             out.width = anEvent.width;
             out.height = anEvent.height;
             return true;
@@ -901,5 +902,78 @@ class SexyAppBaseTest {
         assertFalse(anApp.mActive, "the click arrives while the window is unfocused");
         assertEquals(1, aWidget.mMouseDowns, "the press reaches the widget");
         assertEquals(1, aWidget.mMouseUps, "the release reaches the widget");
+    }
+
+    /**
+     * F11 toggles the screen mode like Alt+Enter (a port addition): one press switches the mode, an
+     * auto-repeat press must not flip it again, and the next clean press switches back.
+     */
+    @Test
+    void f11TogglesTheScreenModeAndAutoRepeatDoesNot() {
+        SexyAppBase anApp = newApp();
+        anApp.mRendererBackend = new FakeRendererBackend().newProxy();
+        anApp.mNoSoundNeeded = true;
+        anApp.init();
+        assertTrue(anApp.mIsWindowed, "the app boots windowed by default");
+
+        PlatformEvent aDown = new PlatformEvent();
+        aDown.type = PlatformEvent.Type.KEY_DOWN;
+        aDown.keyCode = KeyCode.KEYCODE_F11;
+        mPlatform.mEvents.add(aDown);
+        anApp.processDeferredMessages(false);
+        assertFalse(anApp.mIsWindowed, "F11 must leave windowed mode");
+
+        PlatformEvent aRepeat = new PlatformEvent();
+        aRepeat.type = PlatformEvent.Type.KEY_DOWN;
+        aRepeat.keyCode = KeyCode.KEYCODE_F11;
+        aRepeat.repeat = true;
+        mPlatform.mEvents.add(aRepeat);
+        anApp.processDeferredMessages(false);
+        assertFalse(anApp.mIsWindowed, "an auto-repeat F11 must not toggle again");
+
+        PlatformEvent aSecond = new PlatformEvent();
+        aSecond.type = PlatformEvent.Type.KEY_DOWN;
+        aSecond.keyCode = KeyCode.KEYCODE_F11;
+        mPlatform.mEvents.add(aSecond);
+        anApp.processDeferredMessages(false);
+        assertTrue(anApp.mIsWindowed, "the next clean F11 must toggle back");
+    }
+
+    /** F3 toggles the debug overlay flag (a port addition; the overlay content lives in the game
+     * slice, the framework owns only the flag and the draw hook) and forces a redraw, so the
+     * overlay appears or clears immediately even on a surface with nothing animating. */
+    @Test
+    void f3TogglesTheDebugOverlayFlagAndForcesARedraw() {
+        SexyAppBase anApp = newApp();
+        assertFalse(anApp.mShowFPS, "the overlay starts hidden");
+        TestWidget aWidget = new TestWidget();
+        aWidget.resize(0, 0, 100, 100);
+        anApp.mWidgetManager.addWidget(aWidget);
+        anApp.mWidgetManager.drawScreen(); // clear the construction dirt
+        aWidget.mDirty = false;
+        assertFalse(aWidget.mDirty, "the widget starts clean");
+
+        PlatformEvent aDown = new PlatformEvent();
+        aDown.type = PlatformEvent.Type.KEY_DOWN;
+        aDown.keyCode = KeyCode.KEYCODE_F3;
+        mPlatform.mEvents.add(aDown);
+        anApp.processDeferredMessages(false);
+        assertTrue(anApp.mShowFPS, "F3 shows the overlay");
+        assertTrue(aWidget.mDirty, "the toggle forces a redraw of the screen");
+
+        PlatformEvent aRepeat = new PlatformEvent();
+        aRepeat.type = PlatformEvent.Type.KEY_DOWN;
+        aRepeat.keyCode = KeyCode.KEYCODE_F3;
+        aRepeat.repeat = true;
+        mPlatform.mEvents.add(aRepeat);
+        anApp.processDeferredMessages(false);
+        assertTrue(anApp.mShowFPS, "an auto-repeat F3 must not toggle again");
+
+        PlatformEvent aSecond = new PlatformEvent();
+        aSecond.type = PlatformEvent.Type.KEY_DOWN;
+        aSecond.keyCode = KeyCode.KEYCODE_F3;
+        mPlatform.mEvents.add(aSecond);
+        anApp.processDeferredMessages(false);
+        assertFalse(anApp.mShowFPS, "the next clean F3 must hide it again");
     }
 }

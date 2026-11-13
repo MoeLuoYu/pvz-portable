@@ -301,4 +301,39 @@ class GameSelectorTest {
         assertEquals(-GameConstants.BOARD_WIDTH, aSelector.mDestX);
         assertEquals(75, aSelector.mSlideCounter);
     }
+
+    // The bottom-left corner caption (a port addition): the two text builders it draws.
+
+    @Test
+    void modCountLineCountsTheGameAsOne() {
+        // The built-in fallback template is English, like every other in-code default string.
+        assertEquals("Mods loaded: 1", GameSelector.modCountLine(1, null));
+        assertEquals("Mods loaded: 4", GameSelector.modCountLine(4, null));
+    }
+
+    @Test
+    void modCountLinePrefersTheStringTableTemplateOverTheBuiltInText() {
+        // [MODS_HAS_LOADED] in the retail string table, with the {COUNT} placeholder the caption fills.
+        assertEquals("模组已载入 2 个", GameSelector.modCountLine(2, "模组已载入 {COUNT} 个"));
+        assertEquals("Mods loaded: 2", GameSelector.modCountLine(2, "Mods loaded: {COUNT}"));
+
+        // A blank or missing entry falls back to the built-in English template.
+        assertEquals("Mods loaded: 2", GameSelector.modCountLine(2, ""));
+        assertEquals("Mods loaded: 2", GameSelector.modCountLine(2, "   "));
+        assertEquals("Mods loaded: 2", GameSelector.modCountLine(2, null));
+    }
+
+    @Test
+    void versionLineShowsTheBareLoaderWhenNoVersionIsPublished() {
+        assertEquals("Plants vs. Zombies GOTY 1.2.5/Fabric",
+                GameSelector.versionLine("1.2.5", null));
+        assertEquals("Plants vs. Zombies GOTY 1.2.5/Fabric",
+                GameSelector.versionLine("1.2.5", "  "));
+    }
+
+    @Test
+    void versionLineAppendsTheLoaderVersion() {
+        assertEquals("Plants vs. Zombies GOTY 1.2.5/Fabric 0.19.5",
+                GameSelector.versionLine("1.2.5", "0.19.5"));
+    }
 }
