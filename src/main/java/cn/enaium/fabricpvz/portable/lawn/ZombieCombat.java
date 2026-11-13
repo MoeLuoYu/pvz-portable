@@ -184,12 +184,16 @@ public final class ZombieCombat {
                 z.reanimShowTrack("Zombie_outerarm_hand", Reanimation.RENDER_GROUP_HIDDEN);
                 break;
             case ZombieType.ZOMBIE_DANCER:
-                // PORT-NOTE (deviation): the upstream rewrite hides "Zombie_disco_outerarm_lower" +
-                // "Zombie_disco_outerhand_point" here, but the patched-retail dancer reanim carries
-                // no "Zombie_disco_*" tracks at all - its arms are the generic "Zombie_outerarm_*"
-                // names - so both hides were no-ops: the dropped arm never left the body and swung
-                // back into view with every summon's pointing animation. Hide the tracks the
-                // reanim actually has (the generic ones, like the default branch below).
+                // PORT-NOTE (deviation): the dancer's arm-track names differ per retail pak
+                // variant. The Chinese GOTY pak (the distribution this port targets, verified by a
+                // loaded-reanim probe) carries the unpatched "Zombie_disco_*" names - the same
+                // names the upstream rewrite hides - while Jackson-patched paks use the generic
+                // "Zombie_outerarm_*" ones. Hide both families so the dropped arm leaves the body
+                // on every distribution: the lower arm plus both hand tracks (outerhand and
+                // outerhand_point; upstream hid only outerhand_point); the upper arm stays like
+                // every other zombie's stub. Hiding a name a reanim does not carry is a no-op.
+                z.reanimShowPrefix("Zombie_disco_outerarm_lower", Reanimation.RENDER_GROUP_HIDDEN);
+                z.reanimShowPrefix("Zombie_disco_outerhand", Reanimation.RENDER_GROUP_HIDDEN);
                 z.reanimShowPrefix("Zombie_outerarm_lower", Reanimation.RENDER_GROUP_HIDDEN);
                 z.reanimShowPrefix("Zombie_outerarm_hand", Reanimation.RENDER_GROUP_HIDDEN);
                 break;
