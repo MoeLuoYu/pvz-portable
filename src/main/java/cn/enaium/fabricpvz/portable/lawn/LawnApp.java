@@ -1937,7 +1937,84 @@ public class LawnApp extends SexyApp {
             shutdown();
             return false;
         }
+        pollScreenshotNotification();
         return super.updateAppStep(updated);
+    }
+
+    /** PORT-NOTE (deviation): the F2 screenshot caption, marshalled from the save worker thread. */
+    private volatile String mScreenshotNotification;
+    /** The transient caption state (drawn over any screen, see drawTransientMessage). */
+    private String mTransientMessage;
+    private long mTransientMessageUntilTick;
+    private boolean mTransientMessageCleanupDone;
+
+    /**
+     * Called by the screenshot save worker (see screenshotRequested): the file's path on success,
+     * the failure reason on a failed save — either way the caption to show is queued.
+     */
+    void onScreenshotFinished(java.nio.file.Path theFile, String theFailureReason) {
+        if (theFile != null) {
+            mScreenshotNotification = PvzpStringFile.translate("[SCREENSHOT_SAVED]")
+                    .replace("{FILENAME}", theFile.getFileName().toString());
+        } else {
+            mScreenshotNotification = PvzpStringFile.translate("[SCREENSHOT_SAVE_FAILED]")
+                    .replace("{REASON}", theFailureReason);
+        }
+    }
+
+    /** Flushes the queued screenshot caption into the transient caption (drawn over any screen). */
+    private void pollScreenshotNotification() {
+        if (mScreenshotNotification == null) {
+            return;
+        }
+        String aMessage = mScreenshotNotification;
+        mScreenshotNotification = null;
+        showTransientMessage(aMessage, 3000);
+    }
+
+    @Override
+    public void showTransientMessage(String theMessage, int theDurationMs) {
+        mTransientMessage = theMessage;
+        mTransientMessageUntilTick = ticks() + theDurationMs;
+        mTransientMessageCleanupDone = false;
+        mWidgetManager.markAllDirty();
+    }
+
+    /** Draws the transient caption top-centre with the debug overlay's shaded font. */
+    @Override
+    public void drawTransientMessage(Graphics g) {
+        if (mTransientMessage == null) {
+            return;
+        }
+        if (ticks() >= mTransientMessageUntilTick) {
+            // expired: the canvas keeps the last drawn caption baked in - one full redraw erases it
+            if (!mTransientMessageCleanupDone) {
+                mTransientMessageCleanupDone = true;
+                mWidgetManager.markAllDirty();
+            }
+            return;
+        }
+
+        Font aFont = Resources.getFontById(Resources.FONT_PICO129_ID);
+        if (aFont == null || aFont.mHeight <= 0) {
+            return;
+        }
+        g.setFont(aFont);
+        g.setColor(Color.White);
+        int aX = GameConstants.BOARD_WIDTH / 2 - aFont.stringWidth(mTransientMessage) / 2;
+        g.drawStringShaded(mTransientMessage, aX, 4 + aFont.getAscent(), Color.Black);
+    }
+
+    /**
+     * PORT-NOTE (deviation): F2 saves a screenshot (see SexyAppBase.screenshotRequested); this game
+     * slice adds the [SCREENSHOT_SAVED] / [SCREENSHOT_SAVE_FAILED] caption once the save worker
+     * reports the outcome.
+     */
+    @Override
+    public void screenshotRequested() {
+        if (mRendererBackend != null) {
+            mRendererBackend.requestScreenshot(this::onScreenshotFinished);
+        }
     }
 
     // LawnApp::UpdateApp (LawnApp.cpp:2207)

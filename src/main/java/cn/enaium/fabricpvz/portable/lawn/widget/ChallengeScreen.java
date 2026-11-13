@@ -76,8 +76,14 @@ public class ChallengeScreen extends Widget implements ButtonListener {
     public static final int CHALLENGE_PAGE_BUTTON_X = 200;
     public static final int CHALLENGE_PAGE_BUTTON_PITCH = 100;
     public static final int CHALLENGE_PAGE_BUTTON_Y = 568;
-    public static final int CHALLENGE_PAGE_BUTTON_WIDTH = 111;
+    public static final int CHALLENGE_PAGE_BUTTON_WIDTH = 100;
     public static final int CHALLENGE_PAGE_BUTTON_HEIGHT = 26;
+
+    /** The shared frame behind the switcher labels: one button image scaled around both of them. */
+    public static final int CHALLENGE_PAGE_FRAME_X = 295;
+    public static final int CHALLENGE_PAGE_FRAME_Y = 568;
+    public static final int CHALLENGE_PAGE_FRAME_WIDTH = 210;
+    public static final int CHALLENGE_PAGE_FRAME_HEIGHT = 26;
     // ChallengeScreen.cpp:129-139 (back button)
     public static final int CHALLENGE_BACK_BUTTON_X = 18;
     public static final int CHALLENGE_BACK_BUTTON_Y = 568;
@@ -274,24 +280,20 @@ public class ChallengeScreen extends Widget implements ButtonListener {
         for (int aPageIdx = ChallengePage.CHALLENGE_PAGE_SURVIVAL; aPageIdx < ChallengePage.MAX_CHALLANGE_PAGES; aPageIdx++) {
             // PORT-NOTE (deviation): upstream labels the limbo button from LIMBO_PAGE_BUTTON
             // ("状态页" in the retail table); the user asked for a numbered label instead, so both
-            // visible buttons carry [PAGE_X] — 第 1 页 (mini-games) / 第 2 页 (limbo). The switcher
-            // wears the same button look as the [BACK_TO_MENU] button (the user asked for the
-            // highlight); the images are the chooser's button pair the back button uses too.
-            String aPageLabel = PvzpStringFile.translate("[PAGE_X]")
-                    .replace("{PAGE}", Integer.toString(aPageIdx));
-            NewLawnButton aPageButton = GameButton.makeNewButton(ChallengeScreen_Page + aPageIdx, this,
-                    aPageLabel, null,
-                    Resources.getImageById(Resources.IMAGE_SEEDCHOOSER_BUTTON2_ID),
-                    Resources.getImageById(Resources.IMAGE_SEEDCHOOSER_BUTTON2_GLOW_ID),
-                    Resources.getImageById(Resources.IMAGE_SEEDCHOOSER_BUTTON2_GLOW_ID));
+            // visible buttons carry [PAGE_X] — 第 1 页 (mini-games) / 第 2 页 (limbo). The labels are
+            // frameless: the shared frame around the whole switcher is one scaled button image drawn
+            // by draw() behind them.
+            mPageButton[aPageIdx] = new ButtonWidget(ChallengeScreen_Page + aPageIdx, this);
+            ButtonWidget aPageButton = mPageButton[aPageIdx];
             aPageButton.mDoFinger = true;
-            aPageButton.mTextDownOffsetX = 1;
-            aPageButton.mTextDownOffsetY = 1;
-            aPageButton.setLabelColor(new Color(42, 42, 90));
-            aPageButton.setLabelHiliteColor(new Color(42, 42, 90));
+            aPageButton.mLabel = PvzpStringFile.translate("[PAGE_X]")
+                    .replace("{PAGE}", Integer.toString(aPageIdx));
+            aPageButton.mButtonImage = Resources.getImageById(Resources.IMAGE_BLANK_ID);
+            aPageButton.mOverImage = Resources.getImageById(Resources.IMAGE_BLANK_ID);
+            aPageButton.mDownImage = Resources.getImageById(Resources.IMAGE_BLANK_ID);
+            aPageButton.setFont(Resources.getFontById(Resources.FONT_BRIANNETOD12_ID));
             aPageButton.resize(CHALLENGE_PAGE_BUTTON_X + CHALLENGE_PAGE_BUTTON_PITCH * aPageIdx,
                     CHALLENGE_PAGE_BUTTON_Y, CHALLENGE_PAGE_BUTTON_WIDTH, CHALLENGE_PAGE_BUTTON_HEIGHT);
-            mPageButton[aPageIdx] = aPageButton;
             if (!showPageButtons() || aPageIdx == ChallengePage.CHALLENGE_PAGE_SURVIVAL
                     || aPageIdx == ChallengePage.CHALLENGE_PAGE_PUZZLE) {
                 aPageButton.mVisible = false;
@@ -475,19 +477,12 @@ public class ChallengeScreen extends Widget implements ButtonListener {
             Image aFrame = Resources.getImageById(Resources.IMAGE_SEEDCHOOSER_BUTTON2_ID);
             Image aGlow = Resources.getImageById(Resources.IMAGE_SEEDCHOOSER_BUTTON2_GLOW_ID);
             if (aPage == mPageIndex) {
-                // the current page wears the framed button as its highlight and is not clickable
-                aPageButton.setLabelColor(new Color(42, 42, 90));
-                aPageButton.mDisabled = true;
-                aPageButton.mButtonImage = aFrame;
-                aPageButton.mOverImage = aFrame;
-                aPageButton.mDownImage = aFrame;
-            } else {
-                // the clickable jump target: frameless bright text, like the original switcher
+                // the current page carries the highlight color and is not clickable
                 aPageButton.setLabelColor(new Color(255, 240, 0));
+                aPageButton.mDisabled = true;
+            } else {
+                aPageButton.setLabelColor(new Color(42, 42, 90));
                 aPageButton.mDisabled = false;
-                aPageButton.mButtonImage = Resources.getImageById(Resources.IMAGE_BLANK_ID);
-                aPageButton.mOverImage = Resources.getImageById(Resources.IMAGE_BLANK_ID);
-                aPageButton.mDownImage = Resources.getImageById(Resources.IMAGE_BLANK_ID);
             }
         }
     }
@@ -680,6 +675,17 @@ public class ChallengeScreen extends Widget implements ButtonListener {
     public void draw(Graphics g) {
         g.setLinearBlend(true);
         g.drawImage(Resources.getImageById(Resources.IMAGE_CHALLENGE_BACKGROUND_ID), 0, 0);
+
+        // PORT-NOTE (deviation): the switcher's shared frame — one button image scaled around both
+        // labels (child widgets draw after this, so the labels land on top). Only on the switcher
+        // pages; the highlight itself is the labels' font colors (see updateButtons).
+        if (showPageButtons()) {
+            Image aFrame = Resources.getImageById(Resources.IMAGE_SEEDCHOOSER_BUTTON2_ID);
+            g.drawImage(aFrame,
+                    new Rect(CHALLENGE_PAGE_FRAME_X, CHALLENGE_PAGE_FRAME_Y,
+                            CHALLENGE_PAGE_FRAME_WIDTH, CHALLENGE_PAGE_FRAME_HEIGHT),
+                    new Rect(0, 0, aFrame.getWidth(), aFrame.getHeight()));
+        }
 
         String aTitleString = mPageIndex == ChallengePage.CHALLENGE_PAGE_SURVIVAL ? "[PICK_AREA]"
                 : mPageIndex == ChallengePage.CHALLENGE_PAGE_PUZZLE ? "[SCARY_POTTER]" : "[PICK_CHALLENGE]";

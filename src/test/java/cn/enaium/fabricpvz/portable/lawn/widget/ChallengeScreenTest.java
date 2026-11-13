@@ -85,12 +85,17 @@ class ChallengeScreenTest {
         assertEquals(104, ChallengeScreen.CHALLENGE_BUTTON_WIDTH);
         assertEquals(115, ChallengeScreen.CHALLENGE_BUTTON_HEIGHT);
 
-        // The page switcher wears the back button's look: (200 + 100*page, 568, 111, 26).
+        // The switcher labels sit at (200 + 100*page, 568, 100, 26) inside the shared frame
+        // (295, 568, 210, 26) drawn by the screen behind them.
         assertEquals(200, ChallengeScreen.CHALLENGE_PAGE_BUTTON_X);
         assertEquals(100, ChallengeScreen.CHALLENGE_PAGE_BUTTON_PITCH);
         assertEquals(568, ChallengeScreen.CHALLENGE_PAGE_BUTTON_Y);
-        assertEquals(111, ChallengeScreen.CHALLENGE_PAGE_BUTTON_WIDTH);
+        assertEquals(100, ChallengeScreen.CHALLENGE_PAGE_BUTTON_WIDTH);
         assertEquals(26, ChallengeScreen.CHALLENGE_PAGE_BUTTON_HEIGHT);
+        assertEquals(295, ChallengeScreen.CHALLENGE_PAGE_FRAME_X);
+        assertEquals(568, ChallengeScreen.CHALLENGE_PAGE_FRAME_Y);
+        assertEquals(210, ChallengeScreen.CHALLENGE_PAGE_FRAME_WIDTH);
+        assertEquals(26, ChallengeScreen.CHALLENGE_PAGE_FRAME_HEIGHT);
 
         // ChallengeScreen.cpp:129-139 -> back button at (18, 568, 111, 26).
         assertEquals(18, ChallengeScreen.CHALLENGE_BACK_BUTTON_X);

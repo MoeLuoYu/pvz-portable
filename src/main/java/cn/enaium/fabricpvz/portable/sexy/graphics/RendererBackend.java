@@ -1,5 +1,7 @@
 package cn.enaium.fabricpvz.portable.sexy.graphics;
 
+import java.nio.file.Path;
+
 /**
  * Platform drawing backend used by {@link Graphics}.
  *
@@ -189,6 +191,18 @@ public interface RendererBackend {
 
     /** Presents the rendered frame (no-op for offscreen targets). */
     void present();
+
+    /**
+     * Requests a screenshot of the next presented frame (a port addition, bound to F2). The capture
+     * happens on the frame thread inside the backend's present; the encode and file write run
+     * elsewhere. A no-op by default (headless/test backends have nothing to capture); a real
+     * backend rate-limits internally (a capture is skipped while the previous one is still saving).
+     *
+     * @param theCallback runs on the save worker thread: the written file's path and a {@code null}
+     *                    reason on success, {@code null} path and the failure reason otherwise
+     */
+    default void requestScreenshot(java.util.function.BiConsumer<Path, String> theCallback) {
+    }
 
     /**
      * Sets the logical drawing resolution (upstream's fixed 800x600 screen space) and the scaling

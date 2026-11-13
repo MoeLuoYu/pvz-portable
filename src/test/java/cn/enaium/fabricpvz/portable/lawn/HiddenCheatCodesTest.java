@@ -18,6 +18,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Assumptions;
@@ -36,6 +38,12 @@ class HiddenCheatCodesTest {
     /** A headless adventure app whose reanimations look loaded (BoardTest's LoadedReanimApp). */
     private static final class LoadedReanimApp extends LawnApp {
         int mPreNewGameCount;
+        final List<String> mTransientMessages = new ArrayList<>();
+
+        @Override
+        public void showTransientMessage(String theMessage, int theDurationMs) {
+            mTransientMessages.add(theMessage);
+        }
 
         @Override
         public void preNewGame(int theGameMode, boolean theLookForSavedGame) {
@@ -563,6 +571,28 @@ class HiddenCheatCodesTest {
         assertNull(board.mApp.getDialog(Dialogs.DIALOG_CHEAT));
         assertFalse(board.mPaused, "the last closed modal resumes the level");
         assertEquals(1, app.mPreNewGameCount, "the OK path restarts into the entered level");
+    }
+
+    @Test
+    void screenshotSaveShowsTheCaption() throws Exception {
+        Board board = newPlayingBoard();
+        LoadedReanimApp app = (LoadedReanimApp) board.mApp;
+        app.mStringProperties.put("SCREENSHOT_SAVED", "已将截图保存为{FILENAME}");
+        app.mStringProperties.put("SCREENSHOT_SAVE_FAILED", "截图保存失败：{REASON}");
+
+        // the save worker reports the file; the caption shows over any screen on the next step
+        app.onScreenshotFinished(java.nio.file.Path.of("screenshots", "2026-11-14_12.00.00.png"), null);
+        app.updateAppStep(null);
+
+        assertEquals(1, app.mTransientMessages.size());
+        assertEquals("已将截图保存为2026-11-14_12.00.00.png", app.mTransientMessages.get(0));
+
+        // a failed save reports its reason instead
+        app.onScreenshotFinished(null, "disk full");
+        app.updateAppStep(null);
+
+        assertEquals(2, app.mTransientMessages.size());
+        assertEquals("截图保存失败：disk full", app.mTransientMessages.get(1));
     }
 
     // -------------------------------------------------------------------------------------

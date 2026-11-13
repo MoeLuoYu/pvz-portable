@@ -1,7 +1,15 @@
 package cn.enaium.fabricpvz.portable.pvzp.platform.sdl;
 
+import java.awt.image.BufferedImage;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import javax.imageio.ImageIO;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.lwjgl.sdl.SDLBlendMode;
 import org.lwjgl.sdl.SDLError;
 import org.lwjgl.sdl.SDLInit;
@@ -116,6 +124,14 @@ public final class SdlRenderer implements RendererBackend, AutoCloseable {
 
     /** True once the presence of a scene canvas has been decided (the texture is then never re-made). */
     private boolean mSceneDecided;
+
+    // PORT-NOTE (deviation): the F2 screenshot state. The capture happens on the frame thread
+    // inside present() (after the composite, before SDL_RenderPresent - the only moment the back
+    // buffer is defined), and the PNG encode + file write run on a worker thread so the frame
+    // never waits on IO. The in-flight gate is the rate limit: F2 spam cannot queue captures.
+    private volatile boolean mScreenshotRequested;
+    private final AtomicBoolean mScreenshotInFlight = new AtomicBoolean(false);
+    private volatile java.util.function.BiConsumer<Path, String> mScreenshotCallback;
 
     /** True once a failed {@code SDL_RenderPresent} was reported; see {@link #presentNow()}. */
     private boolean mPresentErrorLogged;
@@ -1010,8 +1026,92 @@ public final class SdlRenderer implements RendererBackend, AutoCloseable {
         }
     }
 
+    /** F2 pressed: arm the capture (skipped while a previous screenshot is still being saved). */
+    @Override
+    public void requestScreenshot(java.util.function.BiConsumer<Path, String> theCallback) {
+        if (mScreenshotInFlight.compareAndSet(false, true)) {
+            mScreenshotCallback = theCallback;
+            mScreenshotRequested = true;
+        }
+    }
+
+    /**
+     * The capture half of the F2 screenshot, run at the top of {@link #present()}: the composite of
+     * the frame is on screen at this moment and SDL_RenderPresent has not run yet, so the back
+     * buffer is defined (see {@link #readPresentedPixels(int, int, int[])}). The pixels move to a
+     * worker thread for the PNG encode and the file write.
+     */
+    private void captureScreenshotIfRequested() {
+        if (!mScreenshotRequested) {
+            return;
+        }
+        mScreenshotRequested = false;
+        try {
+            int aWidth = presentedWidth();
+            int aHeight = presentedHeight();
+            int[] aPixels = new int[aWidth * aHeight];
+            readPresentedPixels(aWidth, aHeight, aPixels);
+            Thread aSaver = new Thread(() -> saveScreenshot(aPixels, aWidth, aHeight), "screenshot-saver");
+            aSaver.setDaemon(true);
+            aSaver.start();
+        } catch (Throwable theThrowable) {
+            mScreenshotInFlight.set(false);
+            cn.enaium.fabricpvz.portable.sexy.Common.logWarnLn("screenshot capture failed: {}", theThrowable.toString());
+        }
+    }
+
+    /**
+     * The save half of the F2 screenshot, on the worker thread: PNG into {@code
+     * <gameDir>/screenshots/yyyy-MM-dd_HH.mm.ss.png} (Minecraft's naming; a same-second collision
+     * gets {@code -1}, {@code -2}, ... appended). Any failure is logged, never fatal.
+     */
+    private void saveScreenshot(int[] thePixels, int theWidth, int theHeight) {
+        try {
+            String aGameDir = System.getProperty("pvz.gameDir"); // the game-directory property (OpenMptLibrary's constant)
+            Path aDir = (aGameDir == null || aGameDir.isEmpty()
+                    ? Path.of("").toAbsolutePath() : Path.of(aGameDir)).resolve("screenshots");
+
+            BufferedImage anImage = new BufferedImage(theWidth, theHeight, BufferedImage.TYPE_INT_ARGB);
+            anImage.setRGB(0, 0, theWidth, theHeight, thePixels, 0, theWidth);
+
+            Path aFile = screenshotFile(aDir);
+            ImageIO.write(anImage, "png", aFile.toFile());
+            java.util.function.BiConsumer<Path, String> aCallback = mScreenshotCallback;
+            mScreenshotCallback = null;
+            if (aCallback != null) {
+                aCallback.accept(aFile, null);
+            }
+            cn.enaium.fabricpvz.portable.sexy.Common.logInfoLn("Screenshot saved: {}", aFile);
+        } catch (IOException | RuntimeException theThrowable) {
+            cn.enaium.fabricpvz.portable.sexy.Common.logWarnLn("screenshot save failed: {}", theThrowable.toString());
+            java.util.function.BiConsumer<Path, String> aCallback = mScreenshotCallback;
+            mScreenshotCallback = null;
+            if (aCallback != null) {
+                aCallback.accept(null, theThrowable.toString());
+            }
+        } finally {
+            mScreenshotInFlight.set(false);
+        }
+    }
+
+    /**
+     * The screenshot file path (Minecraft's naming rule): {@code
+     * <dir>/yyyy-MM-dd_HH.mm.ss.png}, with {@code -1}, {@code -2}, ... appended on a same-second
+     * collision; the directory is created when missing.
+     */
+    static Path screenshotFile(Path theDir) throws IOException {
+        Files.createDirectories(theDir);
+        String aStamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH.mm.ss"));
+        Path aFile = theDir.resolve(aStamp + ".png");
+        for (int aSuffix = 1; Files.exists(aFile); aSuffix++) {
+            aFile = theDir.resolve(aStamp + "-" + aSuffix + ".png");
+        }
+        return aFile;
+    }
+
     @Override
     public void present() {
+        captureScreenshotIfRequested();
         // SDL refuses to present while a render target is bound - "You can't present on a render target" -
         // and fails the call, which on a window that shows nothing at all is the difference between a
         // frame and a black window. The canvas therefore has to be released for the present. Without a

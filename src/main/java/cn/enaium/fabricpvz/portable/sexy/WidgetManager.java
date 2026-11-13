@@ -525,6 +525,12 @@ public class WidgetManager extends WidgetContainer {
             mApp.drawDebugOverlay(aScrG);
         }
 
+        // The transient caption (the F2 screenshot notification) draws on the same layer - over any
+        // screen, above every widget, before the composite.
+        if (drewStuff && mApp != null) {
+            mApp.drawTransientMessage(aScrG);
+        }
+
         // The frame is complete (widgets, deferred overlays, a self-drawn cursor and the debug
         // overlay are all on the canvas): hand it to the window. No-ops for a backend that draws into
         // the window directly; with a high-density window this is where the canvas is scaled into the

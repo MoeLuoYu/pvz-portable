@@ -778,6 +778,28 @@ public class SexyAppBase implements ButtonListener, DialogListener {
     }
 
     /**
+     * Called when F2 is pressed (never delivered to widgets, like F11/F1/F3): the base requests a
+     * plain capture; the game slice adds the save notification.
+     */
+    public void screenshotRequested() {
+        if (mRendererBackend != null) {
+            mRendererBackend.requestScreenshot((theFile, theReason) -> { });
+        }
+    }
+
+    /**
+     * Shows a transient caption over any screen (a port addition; the F2 screenshot notification —
+     * the board's advice line only exists in-level). The base has no display; the game slice draws
+     * it through {@link #drawTransientMessage}.
+     */
+    public void showTransientMessage(String theMessage, int theDurationMs) {
+    }
+
+    /** Draws the active transient caption over the frame; the base has nothing to draw. */
+    public void drawTransientMessage(Graphics g) {
+    }
+
+    /**
      * Advances the debug overlay's rolling one-second statistics with one presented frame's draw
      * time; at the window edge the accumulators publish their averages.
      */
@@ -4091,6 +4113,15 @@ public class SexyAppBase implements ButtonListener, DialogListener {
                 // delivered to widgets.
                 if (!theEvent.repeat && theEvent.keyCode == KeyCode.KEYCODE_F1) {
                     f1Pressed();
+                    break;
+                }
+
+                // F2 saves a screenshot of the current frame (a port addition, after Minecraft's F2):
+                // the capture runs on the frame thread inside the renderer's present, and the PNG
+                // encode + file write happen on a worker thread. Like F11/F1/F3 the key is never
+                // delivered to widgets, and it works on every screen.
+                if (!theEvent.repeat && theEvent.keyCode == KeyCode.KEYCODE_F2) {
+                    screenshotRequested();
                     break;
                 }
 
