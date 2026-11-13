@@ -531,8 +531,9 @@ final class BoardInput {
         int aPlantCost = b.getCurrentPlantCost(aSeedPacket.mPacketType, aSeedPacket.mImitaterType);
         if (b.mApp.mEasyPlantingCheat) {
             // PORT-NOTE (deviation): upstream shows the raw untranslated debug string
-            // "FREE_PLANTING_CHEAT" here; this port shows the [EASY_PLANTING_CHEAT] lawn-strings key.
-            b.mToolTip.setWarningText("[EASY_PLANTING_CHEAT]");
+            // "FREE_PLANTING_CHEAT" here; the retail LawnStrings carries a [FREE_PLANTING_CHEAT]
+            // entry, so passing the bracketed key shows its translation.
+            b.mToolTip.setWarningText("[FREE_PLANTING_CHEAT]");
         } else if (!aSeedPacket.mActive && (b.mApp.mGameMode == GameMode.GAMEMODE_CHALLENGE_BEGHOULED
                 || b.mApp.mGameMode == GameMode.GAMEMODE_CHALLENGE_BEGHOULED_TWIST)) {
             if (aSeedPacket.mPacketType == SeedType.SEED_BEGHOULED_BUTTON_CRATER) {

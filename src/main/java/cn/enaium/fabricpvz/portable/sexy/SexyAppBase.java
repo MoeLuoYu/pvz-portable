@@ -771,6 +771,13 @@ public class SexyAppBase implements ButtonListener, DialogListener {
     }
 
     /**
+     * Called when F1 is pressed (never delivered to widgets, like F11/F3). The base does nothing;
+     * the game slice binds it to the hidden level-jump dialog.
+     */
+    public void f1Pressed() {
+    }
+
+    /**
      * Advances the debug overlay's rolling one-second statistics with one presented frame's draw
      * time; at the window edge the accumulators publish their averages.
      */
@@ -4047,6 +4054,14 @@ public class SexyAppBase implements ButtonListener, DialogListener {
                         mWidgetManager.markAllDirty();
                     }
                     debugInfoToggled();
+                    break;
+                }
+
+                // F1 opens the hidden level-jump dialog (a port addition; upstream only exposed the
+                // cheat dialog through the debug 'l' key with -cheat). Like F11/F3 the key is never
+                // delivered to widgets.
+                if (!theEvent.repeat && theEvent.keyCode == KeyCode.KEYCODE_F1) {
+                    f1Pressed();
                     break;
                 }
 

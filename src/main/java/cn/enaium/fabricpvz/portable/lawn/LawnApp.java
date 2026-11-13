@@ -1653,6 +1653,24 @@ public class LawnApp extends SexyApp {
         addDialog(Dialogs.DIALOG_CHEAT, aDialog);
     }
 
+    /**
+     * PORT-NOTE (deviation): F1 opens the original hidden level-jump dialog ("Enter New Level") for
+     * everyone — upstream only exposed it through the debug 'l' key with -cheat (Board.cpp KeyChar
+     * 'l' → DoCheatDialog). The level behind it needs no explicit pause: the cheat dialog is modal,
+     * and {@link #modalOpen}/{@link #modalClose} already pause and resume the board around it.
+     */
+    @Override
+    public void f1Pressed() {
+        if (mBoard == null || mGameScene != GameScenes.SCENE_PLAYING) {
+            return;
+        }
+        if (getDialogCount() > 0) {
+            return;
+        }
+
+        doCheatDialog();
+    }
+
     // LawnApp::FinishCheatDialog (LawnApp.cpp:1012)
     public void finishCheatDialog(boolean isYes) {
         CheatDialog aCheatDialog = (CheatDialog) getDialog(Dialogs.DIALOG_CHEAT);

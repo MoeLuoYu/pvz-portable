@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import cn.enaium.fabricpvz.portable.lawn.system.TypingCheck;
+import cn.enaium.fabricpvz.portable.lawn.widget.CheatDialog;
 import cn.enaium.fabricpvz.portable.pvzp.TestAssets;
 import cn.enaium.fabricpvz.portable.sexy.Common;
 import cn.enaium.fabricpvz.portable.sexy.KeyCodes;
@@ -34,6 +35,12 @@ class HiddenCheatCodesTest {
 
     /** A headless adventure app whose reanimations look loaded (BoardTest's LoadedReanimApp). */
     private static final class LoadedReanimApp extends LawnApp {
+        int mPreNewGameCount;
+
+        @Override
+        public void preNewGame(int theGameMode, boolean theLookForSavedGame) {
+            mPreNewGameCount++; // the real restart would build a level; the test only records it
+        }
 
         @Override
         public cn.enaium.fabricpvz.portable.pvzp.reanim.Reanimation addReanimation(float theX, float theY,
@@ -496,6 +503,66 @@ class HiddenCheatCodesTest {
             app.shutdown();
             LawnApp.gLawnApp = null;
         }
+    }
+
+    // -------------------------------------------------------------------------------------
+    // the F1 level-jump dialog
+    // -------------------------------------------------------------------------------------
+
+    @Test
+    void f1OpensTheLevelJumpDialogAndPausesTheLevel() {
+        Board board = newPlayingBoard();
+        assertFalse(board.mPaused);
+        assertNull(board.mApp.getDialog(Dialogs.DIALOG_CHEAT));
+
+        board.mApp.f1Pressed();
+
+        // the dialog is up, seeded with the current stage string, and the level behind it pauses
+        assertNotNull(board.mApp.getDialog(Dialogs.DIALOG_CHEAT));
+        assertTrue(board.mPaused, "the level must pause while the jump dialog is up");
+
+        // cancel closes the dialog and resumes the level
+        board.mApp.finishCheatDialog(false);
+        assertNull(board.mApp.getDialog(Dialogs.DIALOG_CHEAT));
+        assertFalse(board.mPaused, "cancelling the jump dialog must resume the level");
+    }
+
+    @Test
+    void f1IsIgnoredWithoutABoardOrUnderAnotherDialog() {
+        Board board = newPlayingBoard();
+        board.mApp.mGameScene = GameScenes.SCENE_LEVEL_INTRO;
+        board.mApp.f1Pressed();
+        assertNull(board.mApp.getDialog(Dialogs.DIALOG_CHEAT), "no jump dialog outside SCENE_PLAYING");
+
+        Board aPlayingBoard = newPlayingBoard();
+        aPlayingBoard.mApp.f1Pressed();
+        assertNotNull(aPlayingBoard.mApp.getDialog(Dialogs.DIALOG_CHEAT));
+        // a second press under the open dialog must not re-open or re-pause
+        aPlayingBoard.mApp.f1Pressed();
+        assertNotNull(aPlayingBoard.mApp.getDialog(Dialogs.DIALOG_CHEAT));
+    }
+
+    @Test
+    void f1OkRestartsIntoTheEnteredLevel() {
+        Board board = newPlayingBoard();
+        LoadedReanimApp app = (LoadedReanimApp) board.mApp;
+        board.mApp.f1Pressed();
+
+        // an invalid level string opens the error dialog on top and keeps the level paused
+        CheatDialog aDialog = (CheatDialog) board.mApp.getDialog(Dialogs.DIALOG_CHEAT);
+        aDialog.mLevelEditWidget.setText("-5", true);
+        board.mApp.finishCheatDialog(true);
+        assertNotNull(board.mApp.getDialog(Dialogs.DIALOG_CHEAT), "an invalid level keeps the dialog");
+        assertNotNull(board.mApp.getDialog(Dialogs.DIALOG_CHEATERROR));
+        assertTrue(board.mPaused);
+
+        // dismiss the error, then a valid level applies the cheat and restarts (preNewGame recorded)
+        board.mApp.killDialog(Dialogs.DIALOG_CHEATERROR);
+        aDialog.mLevelEditWidget.setText("2-3", true);
+        board.mApp.finishCheatDialog(true);
+        assertNull(board.mApp.getDialog(Dialogs.DIALOG_CHEAT));
+        assertFalse(board.mPaused, "the last closed modal resumes the level");
+        assertEquals(1, app.mPreNewGameCount, "the OK path restarts into the entered level");
     }
 
     // -------------------------------------------------------------------------------------

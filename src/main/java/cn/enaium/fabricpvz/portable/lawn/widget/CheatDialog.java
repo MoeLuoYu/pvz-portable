@@ -48,7 +48,11 @@ public class CheatDialog extends LawnDialog implements EditListener {
 
     // CheatDialog::CheatDialog (CheatDialog.cpp:33)
     public CheatDialog(LawnApp theApp) {
-        super(theApp, Dialogs.DIALOG_CHEAT, true, "CHEAT", "Enter New Level:", "", Dialog.BUTTONS_OK_CANCEL);
+        // PORT-NOTE (deviation): upstream passed the raw debug strings "CHEAT" / "Enter New Level:";
+        // the retail LawnStrings carries [CHEAT_TITLE] / [CHEAT_TO_LEVEL], and LawnDialog translates
+        // bracketed keys, so pass those.
+        super(theApp, Dialogs.DIALOG_CHEAT, true, "[CHEAT_TITLE]", "[CHEAT_TO_LEVEL]", "",
+                Dialog.BUTTONS_OK_CANCEL);
 
         mApp = theApp;
         mVerticalCenterText = false;
