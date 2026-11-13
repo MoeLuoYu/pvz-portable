@@ -737,6 +737,37 @@ class ZombieTest {
     }
 
     @Test
+    void potatoMineBlastLeavesNoCorpse(@org.junit.jupiter.api.io.TempDir java.nio.file.Path theTempDir)
+            throws Exception {
+        // Board::KillAllZombiesInRadius kills with TakeDamage(1800, 18U) on the burn=false path:
+        // the shield-and-body hit plus the DOESNT_LEAVE_BODY bit, so the potato-mine blast (the only
+        // burn=false caller) leaves no corpse — the zombie dies outright instead of playing a death
+        // animation that would leave a body lying around.
+        Optional<Path> aRoot = TestAssets.resourceRoot();
+        Assumptions.assumeTrue(aRoot.isPresent(), "retail assets required for the death-anim path");
+        Board board = newRealBoard(Files.createDirectories(theTempDir.resolve("savedata")), aRoot.get());
+        LawnApp app = board.mApp;
+        try {
+            Zombie z = board.addZombieInRow(ZombieType.ZOMBIE_NORMAL, 2, 0);
+            assertNotNull(z);
+            // fresh zombies spawn off the right board edge, where no damage reaches them
+            z.mPosX = 400;
+            z.mX = 400;
+
+            Rect aZombieRect = z.getZombieRect();
+            int aCenterX = aZombieRect.mX + aZombieRect.mWidth / 2;
+            int aCenterY = aZombieRect.mY + aZombieRect.mHeight / 2;
+            int aKilled = board.killAllZombiesInRadius(2, aCenterX, aCenterY, 60, 0, false, 77);
+
+            assertEquals(1, aKilled, "the blast must catch the zombie");
+            assertTrue(z.mDead, "the potato-mine blast must leave no corpse (TakeDamage(1800, 18U))");
+        } finally {
+            app.shutdown();
+            LawnApp.gLawnApp = null;
+        }
+    }
+
+    @Test
     void houseEntryTriggersTheGameOverPath() {
         requireAssets();
         Board board = newBoard();

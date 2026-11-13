@@ -516,6 +516,13 @@ public class TitleScreen extends Widget implements ButtonListener {
             mApp.loadingCompleted();
         }
 
+        // PORT-NOTE (deviation): the "unlockall" hidden cheat word typed on the title screen pushes
+        // the current save to the fully-unlocked state (LawnApp.unlockAllCheat).
+        if (mApp.mUnlockAllCheck != null && mApp.mUnlockAllCheck.check(theKey)
+                && mApp.mPlayerInfo != null) {
+            mApp.unlockAllCheat();
+        }
+
         if (mApp.mCheatKeys && mApp.mPlayerInfo != null) {
             mQuickLoadKey = theKey;
         }

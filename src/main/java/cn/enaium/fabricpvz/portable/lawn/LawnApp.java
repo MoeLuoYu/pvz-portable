@@ -188,10 +188,10 @@ public class LawnApp extends SexyApp {
     public TypingCheck mDanceCheck;
     public TypingCheck mDaisyCheck;
     public TypingCheck mSukhbirCheck;
-    // PORT-NOTE (deviation): fifteen hidden cheat words new to this port
+    // PORT-NOTE (deviation): sixteen hidden cheat words new to this port
     // (cheatplant/lazyclick/wingame/killzom/killplant/killall/cherryboom/fast/love/froze/
-    // retrack/dotrack/fillhoe/final/nextlevel), typed with the same TypingCheck machinery as the
-    // upstream words above.
+    // retrack/dotrack/fillhoe/final/nextlevel/unlockall), typed with the same TypingCheck machinery
+    // as the upstream words above.
     public TypingCheck mCheatPlantCheck;
     public TypingCheck mLazyClickCheck;
     public TypingCheck mWinGameCheck;
@@ -207,6 +207,7 @@ public class LawnApp extends SexyApp {
     public TypingCheck mFillHoeCheck;
     public TypingCheck mFinalCheck;
     public TypingCheck mNextLevelCheck;
+    public TypingCheck mUnlockAllCheck;
     public boolean mMustacheMode;
     public boolean mSuperMowerMode;
     public boolean mFutureMode;
@@ -494,6 +495,72 @@ public class LawnApp extends SexyApp {
         mFillHoeCheck = new TypingCheck("fillhoe");
         mFinalCheck = new TypingCheck("final");
         mNextLevelCheck = new TypingCheck("nextlevel");
+        mUnlockAllCheck = new TypingCheck("unlockall");
+    }
+
+    /**
+     * PORT-NOTE (deviation): the "unlockall" hidden cheat word, typed on the title screen — pushes
+     * the current save to the fully-unlocked state: adventure finished, every page unlocked, every
+     * non-endless challenge won (the gold sunflower falls out of the 48 trophies this earns), every
+     * store item purchased, 999990 coins, the tree of wisdom at 500 (its height lives in its own
+     * challenge-record slot), fertilizer / bug spray / chocolate at 100 and every achievement earned.
+     * Endless modes stay unwon: there is no beating them.
+     */
+    public void unlockAllCheat() {
+        PlayerInfo aPlayer = mPlayerInfo;
+        if (aPlayer == null) {
+            return;
+        }
+
+        aPlayer.mLevel = 1;
+        aPlayer.mFinishedAdventure = 1;
+        aPlayer.mHasUnlockedMinigames = 1;
+        aPlayer.mHasUnlockedPuzzleMode = 1;
+        aPlayer.mHasUnlockedSurvivalMode = 1;
+        aPlayer.mCoins = 999990;
+
+        for (int aMode = GameMode.GAMEMODE_SURVIVAL_NORMAL_STAGE_1; aMode < GameMode.NUM_GAME_MODES; aMode++) {
+            int aIndex = aMode - GameMode.GAMEMODE_SURVIVAL_NORMAL_STAGE_1;
+            if (isSurvivalEndless(aMode) || isEndlessScaryPotter(aMode) || isEndlessIZombie(aMode)) {
+                continue;
+            }
+            if (aMode == GameMode.GAMEMODE_TREE_OF_WISDOM) {
+                aPlayer.mChallengeRecords[aIndex] = 500;
+                continue;
+            }
+            if (isSurvivalNormal(aMode)) {
+                aPlayer.mChallengeRecords[aIndex] = GameConstants.SURVIVAL_NORMAL_FLAGS;
+            } else if (isSurvivalHard(aMode)) {
+                aPlayer.mChallengeRecords[aIndex] = GameConstants.SURVIVAL_HARD_FLAGS;
+            } else {
+                aPlayer.mChallengeRecords[aIndex] = 1;
+            }
+        }
+
+        for (int aItem = 0; aItem <= StoreItem.STORE_ITEM_FIRSTAID; aItem++) {
+            switch (aItem) {
+                case StoreItem.STORE_ITEM_FERTILIZER:
+                case StoreItem.STORE_ITEM_BUG_SPRAY:
+                case StoreItem.STORE_ITEM_CHOCOLATE:
+                    aPlayer.mPurchases[aItem] = PlayerInfo.PURCHASE_COUNT_OFFSET + 100;
+                    break;
+                case StoreItem.STORE_ITEM_TREE_FOOD:
+                    aPlayer.mPurchases[aItem] = PlayerInfo.PURCHASE_COUNT_OFFSET + 10;
+                    break;
+                case StoreItem.STORE_ITEM_PACKET_UPGRADE:
+                    // the seed bank holds purchases + 6 slots (Board.cpp:~2356) — all four
+                    // upgrades make the full 10-slot tray
+                    aPlayer.mPurchases[aItem] = 4;
+                    break;
+                default:
+                    aPlayer.mPurchases[aItem] = 1;
+                    break;
+            }
+        }
+
+        java.util.Arrays.fill(aPlayer.mEarnedAchievements, true);
+        java.util.Arrays.fill(aPlayer.mShownAchievements, true);
+        mProfileMgr.save();
     }
 
     // LawnApp::ChangeDirHook (LawnApp.cpp:1261)

@@ -381,6 +381,17 @@ class HiddenCheatCodesTest {
     }
 
     @Test
+    void fastSpeedEndsWithTheLevel() {
+        Board board = newPlayingBoard();
+        LawnApp.gCheatFastMo = false;
+        typeWord(board, "fast");
+        assertTrue(LawnApp.gCheatFastMo);
+
+        board.fadeOutLevel();
+        assertFalse(LawnApp.gCheatFastMo, "the 2x speed must fall back to normal as the level ends");
+    }
+
+    @Test
     void loveMindControlsEveryZombie() {
         Board board = newPlayingBoard();
         Zombie aZombie1 = board.addZombie(ZombieType.ZOMBIE_NORMAL, Zombie.ZOMBIE_WAVE_DEBUG);
@@ -403,6 +414,88 @@ class HiddenCheatCodesTest {
                 || aZombie1.isDeadOrDying());
         assertTrue(aZombie2.mChilledCounter > 0 || aZombie2.mIceTrapCounter > 0
                 || aZombie2.isDeadOrDying());
+    }
+
+    // -------------------------------------------------------------------------------------
+    // the unlockall title-screen cheat
+    // -------------------------------------------------------------------------------------
+
+    @Test
+    void unlockAllPushesTheSaveToTheFullyUnlockedState() {
+        LawnApp app = newAdventureApp();
+        assertFalse(app.hasFinishedAdventure());
+        assertFalse(app.hasBeatenChallenge(GameMode.GAMEMODE_CHALLENGE_WAR_AND_PEAS));
+
+        app.unlockAllCheat();
+
+        // adventure finished, every page unlocked, 999990 coins; the progress stands at F1-1 (the
+        // second play-through's first level), which is what Dave's seed pick rides on
+        assertTrue(app.hasFinishedAdventure());
+        assertEquals(1, app.mPlayerInfo.mLevel);
+        assertFalse(app.isFirstTimeAdventureMode());
+        assertEquals(1, app.mPlayerInfo.mHasUnlockedMinigames);
+        assertEquals(1, app.mPlayerInfo.mHasUnlockedPuzzleMode);
+        assertEquals(1, app.mPlayerInfo.mHasUnlockedSurvivalMode);
+        assertEquals(999990, app.mPlayerInfo.mCoins);
+
+        // every non-endless challenge won: survival by flags, the rest by record, endless untouched
+        assertEquals(GameConstants.SURVIVAL_NORMAL_FLAGS,
+                app.mPlayerInfo.mChallengeRecords[GameMode.GAMEMODE_SURVIVAL_NORMAL_STAGE_1 - 1]);
+        assertEquals(GameConstants.SURVIVAL_HARD_FLAGS,
+                app.mPlayerInfo.mChallengeRecords[GameMode.GAMEMODE_SURVIVAL_HARD_STAGE_1 - 1]);
+        assertEquals(1, app.mPlayerInfo.mChallengeRecords[GameMode.GAMEMODE_CHALLENGE_WAR_AND_PEAS - 1]);
+        assertEquals(1, app.mPlayerInfo.mChallengeRecords[GameMode.GAMEMODE_SCARY_POTTER_1 - 1]);
+        assertEquals(1, app.mPlayerInfo.mChallengeRecords[GameMode.GAMEMODE_PUZZLE_I_ZOMBIE_1 - 1]);
+        assertEquals(0, app.mPlayerInfo.mChallengeRecords[GameMode.GAMEMODE_SURVIVAL_ENDLESS_STAGE_1 - 1]);
+        assertEquals(0, app.mPlayerInfo.mChallengeRecords[GameMode.GAMEMODE_SCARY_POTTER_ENDLESS - 1]);
+        assertEquals(0, app.mPlayerInfo.mChallengeRecords[GameMode.GAMEMODE_PUZZLE_I_ZOMBIE_ENDLESS - 1]);
+        assertTrue(app.hasBeatenChallenge(GameMode.GAMEMODE_CHALLENGE_WAR_AND_PEAS));
+        assertTrue(app.hasBeatenChallenge(GameMode.GAMEMODE_SURVIVAL_NORMAL_STAGE_1));
+        assertFalse(app.hasBeatenChallenge(GameMode.GAMEMODE_SURVIVAL_ENDLESS_STAGE_1));
+
+        // the tree of wisdom stands at 500 (its height lives in its own record slot)
+        assertEquals(500, app.mPlayerInfo.mChallengeRecords[GameMode.GAMEMODE_TREE_OF_WISDOM - 1]);
+
+        // the store is fully bought: consumables at 100, tree food at 10, everything else owned
+        assertEquals(cn.enaium.fabricpvz.portable.lawn.system.PlayerInfo.PURCHASE_COUNT_OFFSET + 100,
+                app.mPlayerInfo.mPurchases[StoreItem.STORE_ITEM_FERTILIZER]);
+        assertEquals(cn.enaium.fabricpvz.portable.lawn.system.PlayerInfo.PURCHASE_COUNT_OFFSET + 100,
+                app.mPlayerInfo.mPurchases[StoreItem.STORE_ITEM_BUG_SPRAY]);
+        assertEquals(cn.enaium.fabricpvz.portable.lawn.system.PlayerInfo.PURCHASE_COUNT_OFFSET + 100,
+                app.mPlayerInfo.mPurchases[StoreItem.STORE_ITEM_CHOCOLATE]);
+        assertEquals(cn.enaium.fabricpvz.portable.lawn.system.PlayerInfo.PURCHASE_COUNT_OFFSET + 10,
+                app.mPlayerInfo.mPurchases[StoreItem.STORE_ITEM_TREE_FOOD]);
+        assertEquals(1, app.mPlayerInfo.mPurchases[StoreItem.STORE_ITEM_PLANT_GATLINGPEA]);
+        assertEquals(1, app.mPlayerInfo.mPurchases[StoreItem.STORE_ITEM_POOL_CLEANER]);
+        // all four slot upgrades: the seed bank holds purchases + 6 slots = 10
+        assertEquals(4, app.mPlayerInfo.mPurchases[StoreItem.STORE_ITEM_PACKET_UPGRADE]);
+
+        // every achievement earned, and the 48 trophies make the gold sunflower fall out
+        for (boolean aEarned : app.mPlayerInfo.mEarnedAchievements) {
+            assertTrue(aEarned);
+        }
+        assertTrue(app.earnedGoldTrophy(), "winning all non-endless challenges grants the gold sunflower");
+        assertEquals(0, app.trophiesNeedForGoldSunflower());
+    }
+
+    /** The badge image must exist in the retail pak: the Chinese GOTY ships different containers. */
+    @Test
+    void imageLockResolvesFromTheChallengeScreenGroup(@TempDir Path theTempDir) throws Exception {
+        Optional<Path> aRoot = TestAssets.resourceRoot();
+        Assumptions.assumeTrue(aRoot.isPresent(), "retail assets required for the pak-content probe");
+        LawnApp app = ScreenResourceLoadingTest.boot(Files.createDirectories(theTempDir.resolve("savedata")),
+                aRoot.get());
+        try {
+            // the real path of crazyDavePickSeeds: the delayed group loads AND binds through
+            // pvzpLoadResources; a plain extract without the load leaves every image null
+            assertTrue(((cn.enaium.fabricpvz.portable.pvzp.PvzpResourceManager) app.mResourceManager)
+                    .pvzpLoadResources("DelayLoad_ChallengeScreen"));
+            assertNotNull(Resources.getImageById(Resources.IMAGE_LOCK_ID),
+                    "IMAGE_LOCK must resolve from DelayLoad_ChallengeScreen");
+        } finally {
+            app.shutdown();
+            LawnApp.gLawnApp = null;
+        }
     }
 
     // -------------------------------------------------------------------------------------

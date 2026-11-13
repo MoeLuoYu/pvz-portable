@@ -1248,6 +1248,16 @@ public class GameSelector extends Widget implements ButtonListener {
             mApp.mSukhbirMode = !mApp.mSukhbirMode;
             return;
         }
+
+        // PORT-NOTE (deviation): the "unlockall" hidden cheat word typed on the main menu pushes the
+        // current save to the fully-unlocked state (LawnApp.unlockAllCheat). The selector caches its
+        // display state in SyncProfile, so re-sync right away — the unlocked buttons, the start
+        // button and the trophy would otherwise only show up after leaving the menu.
+        if (mApp.mUnlockAllCheck != null && mApp.mUnlockAllCheck.check(theKey)
+                && mApp.mPlayerInfo != null) {
+            mApp.unlockAllCheat();
+            syncProfile(false);
+        }
     }
 
     // GameSelector::KeyChar (GameSelector.cpp:1051-1088)

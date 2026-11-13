@@ -1461,6 +1461,10 @@ public class Board extends Widget implements ButtonListener {
 
     // Board.cpp:1808
     public void fadeOutLevel() {
+        // PORT-NOTE (deviation): the "fast" hidden cheat's 2× speed is level-scoped — every level
+        // end path funnels through here, so the speed falls back to normal as the level fades out.
+        LawnApp.gCheatFastMo = false;
+
         if (mApp.mGameScene != GameScenes.SCENE_PLAYING) {
             refreshSeedPacketFromCursor();
             mApp.mLastLevelStats.reset();
@@ -2952,7 +2956,10 @@ public class Board extends Widget implements ButtonListener {
                     if (theBurn) {
                         aZombie.applyBurn();
                     } else {
-                        aZombie.takeDamage(1800, DamageFlags.DAMAGE_HITS_SHIELD_AND_BODY);
+                        // upstream TakeDamage(1800, 18U): the shield-and-body hit plus the
+                        // DOESNT_LEAVE_BODY bit — the potato-mine blast leaves no corpse
+                        aZombie.takeDamage(1800, DamageFlags.DAMAGE_HITS_SHIELD_AND_BODY
+                                | (1 << DamageFlags.DAMAGE_DOESNT_LEAVE_BODY));
                     }
 
                     aKilledZombies++;

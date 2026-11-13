@@ -6,17 +6,27 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
 import cn.enaium.fabricpvz.portable.lawn.BackgroundType;
 import cn.enaium.fabricpvz.portable.lawn.Board;
 import cn.enaium.fabricpvz.portable.lawn.ChosenSeedState;
 import cn.enaium.fabricpvz.portable.lawn.Dialogs;
 import cn.enaium.fabricpvz.portable.lawn.GameMode;
 import cn.enaium.fabricpvz.portable.lawn.LawnApp;
+import cn.enaium.fabricpvz.portable.lawn.Resources;
+import cn.enaium.fabricpvz.portable.lawn.SeedPacket;
 import cn.enaium.fabricpvz.portable.lawn.SeedType;
 import cn.enaium.fabricpvz.portable.pvzp.PvzpWeightedArray;
+import cn.enaium.fabricpvz.portable.pvzp.TestAssets;
 import cn.enaium.fabricpvz.portable.sexy.Dialog;
 import cn.enaium.fabricpvz.portable.sexy.MTRand;
 import cn.enaium.fabricpvz.portable.sexy.Point;
@@ -343,5 +353,28 @@ class SeedChooserScreenTest {
 
         assertTrue(aSecondApp.mMessages.isEmpty(), "no warning is asked");
         assertFalse(aSecondApp.mBoard.mCutScene.mSeedChoosing, "the level starts with the first press");
+    }
+
+    /**
+     * CrazyDavePickSeeds loads the challenge-screen delayed image group, because the lock badge on
+     * Dave's three taken cards draws IMAGE_LOCK from it (a normal level never loads that group).
+     */
+    @Test
+    void crazyDavePickSeedsLoadsTheLockBadgeImageGroup() {
+        RecordingLawnApp app = newApp(GameMode.GAMEMODE_ADVENTURE, 20, BackgroundType.BACKGROUND_1_DAY);
+        app.mPlayerInfo.mLevel = 50; // the pick pool needs the basic seeds to pass hasSeedType
+        SeedChooserScreen aChooser = newChooser(app);
+
+        aChooser.crazyDavePickSeeds();
+
+        assertTrue(app.mBoard.mLoadedResourceNames.contains("DelayLoad_ChallengeScreen"),
+                "the challenge-screen group must be registered for release");
+        int aPicked = 0;
+        for (int aSeedType = SeedType.SEED_PEASHOOTER; aSeedType < SeedType.NUM_SEEDS_IN_CHOOSER; aSeedType++) {
+            if (aChooser.mChosenSeeds[aSeedType].mCrazyDavePicked) {
+                aPicked++;
+            }
+        }
+        assertEquals(3, aPicked, "Dave takes exactly three cards");
     }
 }

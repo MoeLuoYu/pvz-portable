@@ -44,9 +44,11 @@ import cn.enaium.fabricpvz.portable.lawn.Zombie;
 import cn.enaium.fabricpvz.portable.lawn.ZombieType;
 import cn.enaium.fabricpvz.portable.lawn.system.Music;
 import cn.enaium.fabricpvz.portable.pvzp.PvzpCommon;
+import cn.enaium.fabricpvz.portable.pvzp.PvzpResourceManager;
 import cn.enaium.fabricpvz.portable.pvzp.PvzpStringFile;
 import cn.enaium.fabricpvz.portable.pvzp.PvzpWeightedArray;
 import cn.enaium.fabricpvz.portable.sexy.Color;
+import cn.enaium.fabricpvz.portable.sexy.Common;
 import cn.enaium.fabricpvz.portable.sexy.Dialog;
 import cn.enaium.fabricpvz.portable.sexy.KeyCode;
 import cn.enaium.fabricpvz.portable.sexy.MTRand;
@@ -350,6 +352,15 @@ public class SeedChooserScreen extends Widget {
 
     // SeedChooserScreen.cpp:225-273
     public void crazyDavePickSeeds() {
+        // PORT-NOTE (deviation): the lock badge on Dave's cards draws IMAGE_LOCK from the
+        // challenge-screen delayed group, which a normal level never loads — load it here (the
+        // pvzpLoadResources call binds the images into the Resources table too) and track it for
+        // release with the board's own delayed resources.
+        if (!mBoard.mLoadedResourceNames.contains("DelayLoad_ChallengeScreen")) {
+            mBoard.mLoadedResourceNames.add("DelayLoad_ChallengeScreen");
+            ((PvzpResourceManager) mApp.mResourceManager).pvzpLoadResources("DelayLoad_ChallengeScreen");
+        }
+
         PvzpWeightedArray[] aSeedArray = new PvzpWeightedArray[SeedType.NUM_SEED_TYPES];
         for (int i = 0; i < SeedType.NUM_SEED_TYPES; i++) {
             aSeedArray[i] = new PvzpWeightedArray();
@@ -730,6 +741,27 @@ public class SeedChooserScreen extends Widget {
                 }
                 SeedPacket.drawSeedPacket(g, aPosX, aPosY, aChosenSeed.mSeedType, aChosenSeed.mImitaterType,
                         0, aGrayed ? 115 : 255, true, false);
+
+                // PORT-NOTE (deviation): the three cards Crazy Dave takes on a second play-through get
+                // a padlock badge (IMAGE_LOCK, the same one the challenge select uses for locked
+                // levels) so they read as unclickable at a glance — only while the chooser is up (the
+                // badge lives here, not on the in-level seed bank). The image comes from the
+                // challenge-screen delayed group, loaded on demand in crazyDavePickSeeds; it is drawn
+                // scaled to a 14px corner badge at the card's bottom-left, its native size exceeds
+                // the packet.
+                if (aSeedState == ChosenSeedState.SEED_IN_BANK && aChosenSeed.mCrazyDavePicked) {
+                    Image aLock = Resources.getImageById(Resources.IMAGE_LOCK_ID);
+                    if (aLock != null) {
+                        int aBadgeHeight = 21;
+                        int aBadgeWidth = Math.max(1, aLock.getWidth() * aBadgeHeight / aLock.getHeight());
+                        // flush right, above the sun-cost strip at the card's bottom edge
+                        g.drawImage(aLock,
+                                new Rect(aPosX + GameConstants.SEED_PACKET_WIDTH - aBadgeWidth,
+                                        aPosY + GameConstants.SEED_PACKET_HEIGHT - aBadgeHeight - 13,
+                                        aBadgeWidth, aBadgeHeight),
+                                new Rect(0, 0, aLock.getWidth(), aLock.getHeight()));
+                    }
+                }
             }
         }
 
@@ -1466,6 +1498,8 @@ public class SeedChooserScreen extends Widget {
 
     // SeedChooserScreen.cpp:1088-1106
     public void closeSeedChooser() {
+        Common.logInfoLn("Dave seed pick: closeSeedChooser entered, bank packets = {}",
+                mBoard.mSeedBank.mNumPackets);
         for (int anIndex = 0; anIndex < mBoard.mSeedBank.mNumPackets; anIndex++) {
             int aSeedType = findSeedInBank(anIndex);
             ChosenSeed aChosenSeed = mChosenSeeds[aSeedType];
