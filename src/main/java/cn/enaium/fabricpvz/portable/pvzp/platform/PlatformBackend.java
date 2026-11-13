@@ -118,6 +118,18 @@ public interface PlatformBackend {
     /** Opens a URL in the default browser (upstream {@code OpenURL}). */
     void openURL(String url);
 
+    /**
+     * Whether the window currently has keyboard/input focus. Only meaningful after {@link #init};
+     * defaults to true so test backends need not implement it.
+     *
+     * <p>PORT-NOTE (deviation): used by the framework to align its focus state at boot — a window
+     * can spend its whole early life unfocused (the game launched behind the active window), and the
+     * framework's {@code mActive} default never learns about it from focus events alone.
+     */
+    default boolean hasInputFocus() {
+        return true;
+    }
+
     /** Destroys the window and releases platform resources. */
     void shutdown();
 }

@@ -215,6 +215,14 @@ public final class SdlPlatform implements PlatformBackend {
     }
 
     @Override
+    public boolean hasInputFocus() {
+        if (mWindow == 0) {
+            return true;
+        }
+        return (SDLVideo.SDL_GetWindowFlags(mWindow) & SDLVideo.SDL_WINDOW_INPUT_FOCUS) != 0;
+    }
+
+    @Override
     public boolean pollEvent(PlatformEvent out) {
         out.reset();
         if (!mInitialized || !SDLEvents.SDL_PollEvent(mEvent)) {

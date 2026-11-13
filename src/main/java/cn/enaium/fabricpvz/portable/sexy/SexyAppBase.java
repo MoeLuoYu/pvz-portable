@@ -3173,6 +3173,16 @@ public class SexyAppBase implements ButtonListener, DialogListener {
             rehupFocus();
         }
 
+        // PORT-NOTE (deviation): a freshly created window can spend its whole early life unfocused
+        // (the game launched behind the active window) — no focus event ever fires, so the mActive
+        // default above stood and the first music played unmuted for a moment before something
+        // muted it. Align once with the real window focus; a later FOCUS_GAINED still un-mutes
+        // through RehupFocus.
+        if (mActive && !mPlatformBackend.hasInputFocus()) {
+            mActive = false;
+            rehupFocus();
+        }
+
         reInitImages();
 
         if (mWidgetManager.mImage == null) {
