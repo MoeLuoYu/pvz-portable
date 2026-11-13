@@ -304,6 +304,8 @@ gh release create "$VERSION" "build/distributions/pvz-portable-$VERSION.zip" \
 | 舞王掉臂随召唤重现 | 掉臂隐藏 `Zombie_disco_outerarm_lower` + `Zombie_disco_outerhand_point`——但补丁后零售版的舞王 reanim 没有 `Zombie_disco_*` track（手臂为通用 `Zombie_outerarm_*` 名），隐藏是空操作：手臂从未消失，召唤切换指点动作时"重新出现" | 按 reanim 实有 track 隐藏：`Zombie_outerarm_lower` + `Zombie_outerarm_hand`（前缀） | 上游重写基于未打补丁时代的 track 名；移植版资产为补丁后版本，两者错位 |
 | 伴舞掉臂残留手 | 掉臂隐藏 `Zombie_disco_outerhand_point`——伴舞 reanim 的手 track 实为 `Zombie_disco_outerhand`（无 `_point`），掉臂后残留一只浮空的手 | 隐藏实有的 `Zombie_disco_outerhand` | 同上，track 名错位 |
 | 伴舞掉落后头颅缩小 | 掉落头颅粒子缩放 = 粒子定义基础 0.8 × 身体缩放 0.8 = 0.64，明显小于刚脱离的挂头（0.8），社区反馈为"缩小成一半" | 替换头图分支内将粒子缩放补偿为 1.0，掉落头与挂头等大 | 粒子基础缩放与身体缩放的二次叠加；替换头图本身已是身体尺寸，无需再缩 |
+| 选项菜单免责声明按钮 | 无此按钮 | 主菜单选项对话框（游戏选择器变体）在制作人员按钮上方新增"免责声明"按钮（移植新增，枚举 id 10）：标签、弹窗标题与确认按钮都解析 `[DISCLAIMER]` 键（代码内默认英文 "Disclaimer"，LawnStrings 条目优先），弹窗为通用 LawnDialog（PVZ 标准窗口样式，正文自动换行、按内容自适应高度），正文为免责声明三句原文按 Policy 段落排列（补回原文缺失的空格），确认按钮为标准 [DIALOG_BUTTON_OK] | 用户要求展示 EA Mod Policy 免责声明；按钮仅在游戏选择器变体显示（关卡内暂停菜单保持上游布局，该槽位由重新开始按钮占用） |
+| 启用隐藏内容（生存无尽 + limbo 页） | 四个生存无尽变体（白天/黑夜/迷雾/屋顶）上游定义在 limbo 页第 3 行、零售从不显示；页面切换器仅作弊键开启且生存/谜题页不显示，limbo 按钮需 5 连击彩蛋解锁（ChallengeScreen.cpp:50-54, 356-360, 751-771） | 四个无尽变体移入生存选关页的无尽行（第 2 行，环绕泳池无尽，UI 表与逻辑表同步）；页面切换器常开于迷你游戏页与状态页（两个按钮：[PAGE_X] 第 1 页 / 第 2 页，limbo 按钮不再用 [LIMBO_PAGE_BUTTON] 的"状态页"文本；生存与谜题页无切换器也无按钮）；limbo 页按用户要求重排：12 个可玩条目两行 6 列（6 列网格居中，x=48/间距 120），休闲花园/智慧树/Upsell/Intro 四个展示条目在下方隔开一行居中（行距 53px，列 1-4）；松鼠开发测试项（上游与 intro 同格被盖住、零售从未实际可见）不再显示，保持上游的永解锁规则；无尽变体的解锁规则与泳池无尽完全一致（10 生存奖杯）；5 连击彩蛋代码保留但不再门控 | 用户要求启用游戏的隐藏内容；定义表 UI 侧（ChallengeScreen）与逻辑侧（Challenge）两份同步修改；金表测试的页计数从 11/21 改为 15/17 并注明偏差 |
 
 ## 开发任务
 

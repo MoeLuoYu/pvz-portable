@@ -3388,7 +3388,10 @@ public class LawnApp extends SexyApp {
 
         for (int i = 0; i < GameMode.NUM_GAME_MODES - 1; i++) {
             ChallengeDefinition aDef = ChallengeScreen.getChallengeDefinition(i);
-            if (aDef.mPage == thePage && hasBeatenChallenge(aDef.mChallengeMode)) {
+            // Port addition: the limbo showcase entries (zen garden / tree of wisdom / upsell /
+            // intro) are not winnable challenges — never count them (ChallengeScreen.isShowcaseEntry).
+            if (aDef.mPage == thePage && !ChallengeScreen.isShowcaseEntry(aDef.mChallengeMode)
+                    && hasBeatenChallenge(aDef.mChallengeMode)) {
                 aNumTrophies++;
             }
         }

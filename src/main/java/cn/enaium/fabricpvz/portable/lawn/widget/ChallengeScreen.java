@@ -60,6 +60,18 @@ public class ChallengeScreen extends Widget implements ButtonListener {
     /** Mini-game / limbo / puzzle row layout: `93 + row * 119` (ChallengeScreen.cpp:168). */
     public static final int CHALLENGE_BUTTON_OTHER_Y = 93;
     public static final int CHALLENGE_BUTTON_OTHER_ROW_PITCH = 119;
+
+    /**
+     * Port addition: the limbo page's own grid — six 104px thumbnails per row centered on the
+     * screen (x = 48, pitch 120), two playable rows plus a separated third row for the four
+     * showcase entries (380 clears row 1 visibly: 212 + 115 = 327, a 53px gap).
+     */
+    public static final int CHALLENGE_BUTTON_LIMBO_X = 48;
+    public static final int CHALLENGE_BUTTON_LIMBO_COL_PITCH = 120;
+    public static final int CHALLENGE_BUTTON_LIMBO_SHOWCASE_Y = 380;
+    /** Port addition: the squirrel tech demo shares upstream cell (2,3) with intro and stays off
+     * the re-laid-out page (the user's 12 + 4 layout counts the 16 entries visible in retail). */
+    public static final int CHALLENGE_LIMBO_HIDDEN_MODE = GameMode.GAMEMODE_CHALLENGE_SQUIRREL;
     // ChallengeScreen.cpp:141-158 (page buttons)
     public static final int CHALLENGE_PAGE_BUTTON_X = 200;
     public static final int CHALLENGE_PAGE_BUTTON_PITCH = 100;
@@ -84,11 +96,14 @@ public class ChallengeScreen extends Widget implements ButtonListener {
         new ChallengeDefinition(GameMode.GAMEMODE_SURVIVAL_HARD_STAGE_3, 7, ChallengePage.CHALLENGE_PAGE_SURVIVAL, 1, 2, "[SURVIVAL_POOL_HARD]"),
         new ChallengeDefinition(GameMode.GAMEMODE_SURVIVAL_HARD_STAGE_4, 8, ChallengePage.CHALLENGE_PAGE_SURVIVAL, 1, 3, "[SURVIVAL_FOG_HARD]"),
         new ChallengeDefinition(GameMode.GAMEMODE_SURVIVAL_HARD_STAGE_5, 9, ChallengePage.CHALLENGE_PAGE_SURVIVAL, 1, 4, "[SURVIVAL_ROOF_HARD]"),
-        new ChallengeDefinition(GameMode.GAMEMODE_SURVIVAL_ENDLESS_STAGE_1, 10, ChallengePage.CHALLENGE_PAGE_LIMBO, 3, 0, "[SURVIVAL_DAY_ENDLESS]"),
-        new ChallengeDefinition(GameMode.GAMEMODE_SURVIVAL_ENDLESS_STAGE_2, 10, ChallengePage.CHALLENGE_PAGE_LIMBO, 3, 1, "[SURVIVAL_NIGHT_ENDLESS]"),
+        // PORT-NOTE (deviation): upstream banks these four endless variants on the limbo page
+        // (row 3, :50-54); the hidden-content enablement surfaces them on the Survival page's
+        // endless row around the pool endless entry retail already shows.
+        new ChallengeDefinition(GameMode.GAMEMODE_SURVIVAL_ENDLESS_STAGE_1, 10, ChallengePage.CHALLENGE_PAGE_SURVIVAL, 2, 0, "[SURVIVAL_DAY_ENDLESS]"),
+        new ChallengeDefinition(GameMode.GAMEMODE_SURVIVAL_ENDLESS_STAGE_2, 10, ChallengePage.CHALLENGE_PAGE_SURVIVAL, 2, 1, "[SURVIVAL_NIGHT_ENDLESS]"),
         new ChallengeDefinition(GameMode.GAMEMODE_SURVIVAL_ENDLESS_STAGE_3, 10, ChallengePage.CHALLENGE_PAGE_SURVIVAL, 2, 2, "[SURVIVAL_POOL_ENDLESS]"),
-        new ChallengeDefinition(GameMode.GAMEMODE_SURVIVAL_ENDLESS_STAGE_4, 10, ChallengePage.CHALLENGE_PAGE_LIMBO, 3, 2, "[SURVIVAL_FOG_ENDLESS]"),
-        new ChallengeDefinition(GameMode.GAMEMODE_SURVIVAL_ENDLESS_STAGE_5, 10, ChallengePage.CHALLENGE_PAGE_LIMBO, 3, 3, "[SURVIVAL_ROOF_ENDLESS]"),
+        new ChallengeDefinition(GameMode.GAMEMODE_SURVIVAL_ENDLESS_STAGE_4, 10, ChallengePage.CHALLENGE_PAGE_SURVIVAL, 2, 3, "[SURVIVAL_FOG_ENDLESS]"),
+        new ChallengeDefinition(GameMode.GAMEMODE_SURVIVAL_ENDLESS_STAGE_5, 10, ChallengePage.CHALLENGE_PAGE_SURVIVAL, 2, 4, "[SURVIVAL_ROOF_ENDLESS]"),
         new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_WAR_AND_PEAS, 0, ChallengePage.CHALLENGE_PAGE_CHALLENGE, 0, 0, "[WAR_AND_PEAS]"),
         new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_WALLNUT_BOWLING, 6, ChallengePage.CHALLENGE_PAGE_CHALLENGE, 0, 1, "[WALL_NUT_BOWLING]"),
         new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_SLOT_MACHINE, 2, ChallengePage.CHALLENGE_PAGE_CHALLENGE, 0, 2, "[SLOT_MACHINE]"),
@@ -109,21 +124,28 @@ public class ChallengeScreen extends Widget implements ButtonListener {
         new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_WALLNUT_BOWLING_2, 6, ChallengePage.CHALLENGE_PAGE_CHALLENGE, 3, 2, "[WALL_NUT_BOWLING_EXTREME]"),
         new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_POGO_PARTY, 14, ChallengePage.CHALLENGE_PAGE_CHALLENGE, 3, 3, "[POGO_PARTY]"),
         new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_FINAL_BOSS, 19, ChallengePage.CHALLENGE_PAGE_CHALLENGE, 3, 4, "[FINAL_BOSS]"),
+        // PORT-NOTE (deviation): the limbo page is re-laid-out at the user's request — the 12
+        // playable entries fill two 6-column rows (rows 0-1), and the four showcase entries (zen
+        // garden / tree of wisdom / upsell / intro) sit centered on a separated row below (row 2,
+        // cols 1-4 of the 6-column grid). Upstream packs all 17 entries into 5-column rows
+        // (:75-89); the squirrel tech demo (upstream cell (2,3), sharing intro's cell and never
+        // visible in retail) stays off the page — see updateButtons. Rows stay in GameMode order
+        // (the table is index-aligned: gChallengeDefs[i] opens GameMode i+1).
         new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_ART_CHALLENGE_WALLNUT, 0, ChallengePage.CHALLENGE_PAGE_LIMBO, 0, 0, "[ART_CHALLENGE_WALL_NUT]"),
         new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_SUNNY_DAY, 1, ChallengePage.CHALLENGE_PAGE_LIMBO, 0, 1, "[SUNNY_DAY]"),
         new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_RESODDED, 2, ChallengePage.CHALLENGE_PAGE_LIMBO, 0, 2, "[UNSODDED]"),
         new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_BIG_TIME, 3, ChallengePage.CHALLENGE_PAGE_LIMBO, 0, 3, "[BIG_TIME]"),
         new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_ART_CHALLENGE_SUNFLOWER, 4, ChallengePage.CHALLENGE_PAGE_LIMBO, 0, 4, "[ART_CHALLENGE_SUNFLOWER]"),
-        new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_AIR_RAID, 5, ChallengePage.CHALLENGE_PAGE_LIMBO, 1, 0, "[AIR_RAID]"),
-        new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_ICE, 6, ChallengePage.CHALLENGE_PAGE_LIMBO, 1, 1, "[ICE_LEVEL]"),
-        new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_ZEN_GARDEN, 7, ChallengePage.CHALLENGE_PAGE_LIMBO, 1, 2, "[ZEN_GARDEN]"),
-        new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_HIGH_GRAVITY, 8, ChallengePage.CHALLENGE_PAGE_LIMBO, 1, 3, "[HIGH_GRAVITY]"),
-        new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_GRAVE_DANGER, 11, ChallengePage.CHALLENGE_PAGE_LIMBO, 1, 4, "[GRAVE_DANGER]"),
-        new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_SHOVEL, 10, ChallengePage.CHALLENGE_PAGE_LIMBO, 2, 0, "[CAN_YOU_DIG_IT]"),
-        new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_STORMY_NIGHT, 13, ChallengePage.CHALLENGE_PAGE_LIMBO, 2, 1, "[DARK_STORMY_NIGHT]"),
-        new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_BUNGEE_BLITZ, 9, ChallengePage.CHALLENGE_PAGE_LIMBO, 2, 2, "[BUNGEE_BLITZ]"),
+        new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_AIR_RAID, 5, ChallengePage.CHALLENGE_PAGE_LIMBO, 0, 5, "[AIR_RAID]"),
+        new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_ICE, 6, ChallengePage.CHALLENGE_PAGE_LIMBO, 1, 0, "[ICE_LEVEL]"),
+        new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_ZEN_GARDEN, 7, ChallengePage.CHALLENGE_PAGE_LIMBO, 2, 1, "[ZEN_GARDEN]"),
+        new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_HIGH_GRAVITY, 8, ChallengePage.CHALLENGE_PAGE_LIMBO, 1, 1, "[HIGH_GRAVITY]"),
+        new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_GRAVE_DANGER, 11, ChallengePage.CHALLENGE_PAGE_LIMBO, 1, 2, "[GRAVE_DANGER]"),
+        new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_SHOVEL, 10, ChallengePage.CHALLENGE_PAGE_LIMBO, 1, 3, "[CAN_YOU_DIG_IT]"),
+        new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_STORMY_NIGHT, 13, ChallengePage.CHALLENGE_PAGE_LIMBO, 1, 4, "[DARK_STORMY_NIGHT]"),
+        new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_BUNGEE_BLITZ, 9, ChallengePage.CHALLENGE_PAGE_LIMBO, 1, 5, "[BUNGEE_BLITZ]"),
         new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_SQUIRREL, 10, ChallengePage.CHALLENGE_PAGE_LIMBO, 2, 3, "Squirrel"),
-        new ChallengeDefinition(GameMode.GAMEMODE_TREE_OF_WISDOM, 10, ChallengePage.CHALLENGE_PAGE_LIMBO, 2, 4, "Tree of Wisdom"),
+        new ChallengeDefinition(GameMode.GAMEMODE_TREE_OF_WISDOM, 10, ChallengePage.CHALLENGE_PAGE_LIMBO, 2, 2, "Tree of Wisdom"),
         new ChallengeDefinition(GameMode.GAMEMODE_SCARY_POTTER_1, 10, ChallengePage.CHALLENGE_PAGE_PUZZLE, 0, 0, "[SCARY_POTTER_1]"),
         new ChallengeDefinition(GameMode.GAMEMODE_SCARY_POTTER_2, 10, ChallengePage.CHALLENGE_PAGE_PUZZLE, 0, 1, "[SCARY_POTTER_2]"),
         new ChallengeDefinition(GameMode.GAMEMODE_SCARY_POTTER_3, 10, ChallengePage.CHALLENGE_PAGE_PUZZLE, 0, 2, "[SCARY_POTTER_3]"),
@@ -144,8 +166,8 @@ public class ChallengeScreen extends Widget implements ButtonListener {
         new ChallengeDefinition(GameMode.GAMEMODE_PUZZLE_I_ZOMBIE_8, 11, ChallengePage.CHALLENGE_PAGE_PUZZLE, 3, 2, "[I_ZOMBIE_8]"),
         new ChallengeDefinition(GameMode.GAMEMODE_PUZZLE_I_ZOMBIE_9, 11, ChallengePage.CHALLENGE_PAGE_PUZZLE, 3, 3, "[I_ZOMBIE_9]"),
         new ChallengeDefinition(GameMode.GAMEMODE_PUZZLE_I_ZOMBIE_ENDLESS, 11, ChallengePage.CHALLENGE_PAGE_PUZZLE, 3, 4, "[I_ZOMBIE_ENDLESS]"),
-        new ChallengeDefinition(GameMode.GAMEMODE_UPSELL, 10, ChallengePage.CHALLENGE_PAGE_LIMBO, 3, 4, "Upsell"),
-        new ChallengeDefinition(GameMode.GAMEMODE_INTRO, 10, ChallengePage.CHALLENGE_PAGE_LIMBO, 2, 3, "Intro"),
+        new ChallengeDefinition(GameMode.GAMEMODE_UPSELL, 10, ChallengePage.CHALLENGE_PAGE_LIMBO, 2, 3, "Upsell"),
+        new ChallengeDefinition(GameMode.GAMEMODE_INTRO, 10, ChallengePage.CHALLENGE_PAGE_LIMBO, 2, 4, "Intro"),
     };
 
     // ChallengeScreen.h:50-58
@@ -181,8 +203,25 @@ public class ChallengeScreen extends Widget implements ButtonListener {
         return theMoreTrophiesNeeded == 0;
     }
 
+    /**
+     * Port addition: the limbo showcase entries — zen garden, tree of wisdom, upsell and intro
+     * are maintenance/utility modes, not winnable challenges. They never show a trophy badge and
+     * never count toward any page's trophy total (see drawButton and LawnApp.getNumTrophies).
+     */
+    public static boolean isShowcaseEntry(int theGameMode) {
+        return theGameMode == GameMode.GAMEMODE_CHALLENGE_ZEN_GARDEN
+                || theGameMode == GameMode.GAMEMODE_TREE_OF_WISDOM
+                || theGameMode == GameMode.GAMEMODE_UPSELL
+                || theGameMode == GameMode.GAMEMODE_INTRO;
+    }
+
     // ChallengeScreen.cpp:160-170 (thumbnail grid position)
-    public static int challengeButtonX(int theCol) {
+    // PORT-NOTE (deviation): the page parameter and the limbo branch are a port addition — the
+    // limbo page uses its own 6-column grid (see the CHALLENGE_BUTTON_LIMBO_* constants).
+    public static int challengeButtonX(int thePage, int theCol) {
+        if (thePage == ChallengePage.CHALLENGE_PAGE_LIMBO) {
+            return CHALLENGE_BUTTON_LIMBO_X + theCol * CHALLENGE_BUTTON_LIMBO_COL_PITCH;
+        }
         return CHALLENGE_BUTTON_X + theCol * CHALLENGE_BUTTON_COL_PITCH;
     }
 
@@ -190,6 +229,10 @@ public class ChallengeScreen extends Widget implements ButtonListener {
     public static int challengeButtonY(int thePage, int theRow) {
         if (thePage == ChallengePage.CHALLENGE_PAGE_SURVIVAL) {
             return CHALLENGE_BUTTON_SURVIVAL_Y + theRow * CHALLENGE_BUTTON_SURVIVAL_ROW_PITCH;
+        }
+        if (thePage == ChallengePage.CHALLENGE_PAGE_LIMBO && theRow == 2) {
+            // The showcase row, separated from the playable rows above it.
+            return CHALLENGE_BUTTON_LIMBO_SHOWCASE_Y;
         }
         return CHALLENGE_BUTTON_OTHER_Y + theRow * CHALLENGE_BUTTON_OTHER_ROW_PITCH;
     }
@@ -232,12 +275,11 @@ public class ChallengeScreen extends Widget implements ButtonListener {
             mPageButton[aPageIdx] = new ButtonWidget(ChallengeScreen_Page + aPageIdx, this);
             ButtonWidget aPageButton = mPageButton[aPageIdx];
             aPageButton.mDoFinger = true;
-            if (aPageIdx == ChallengePage.CHALLENGE_PAGE_LIMBO) {
-                aPageButton.mLabel = mApp.getString("LIMBO_PAGE_BUTTON", "Limbo Page");
-            } else {
-                aPageButton.mLabel = PvzpStringFile.translate("[PAGE_X]")
-                        .replace("{PAGE}", Integer.toString(aPageIdx));
-            }
+            // PORT-NOTE (deviation): upstream labels the limbo button from LIMBO_PAGE_BUTTON
+            // ("状态页" in the retail table); the user asked for a numbered label instead, so both
+            // visible buttons carry [PAGE_X] — 第 1 页 (mini-games) / 第 2 页 (limbo).
+            aPageButton.mLabel = PvzpStringFile.translate("[PAGE_X]")
+                    .replace("{PAGE}", Integer.toString(aPageIdx));
             aPageButton.mButtonImage = Resources.getImageById(Resources.IMAGE_BLANK_ID);
             aPageButton.mOverImage = Resources.getImageById(Resources.IMAGE_BLANK_ID);
             aPageButton.mDownImage = Resources.getImageById(Resources.IMAGE_BLANK_ID);
@@ -258,7 +300,7 @@ public class ChallengeScreen extends Widget implements ButtonListener {
             ButtonWidget aChallengeButton = mChallengeButtons[aChallengeMode];
             aChallengeButton.mDoFinger = true;
             aChallengeButton.mFrameNoDraw = true;
-            aChallengeButton.resize(challengeButtonX(aChlDef.mCol), challengeButtonY(aChlDef.mPage, aChlDef.mRow),
+            aChallengeButton.resize(challengeButtonX(aChlDef.mPage, aChlDef.mCol), challengeButtonY(aChlDef.mPage, aChlDef.mRow),
                     CHALLENGE_BUTTON_WIDTH, CHALLENGE_BUTTON_HEIGHT);
             if (!isEntryEnabled(aChallengeMode, moreTrophiesNeeded(aChallengeMode))) {
                 aChallengeButton.mDoFinger = false;
@@ -397,24 +439,33 @@ public class ChallengeScreen extends Widget implements ButtonListener {
     }
 
     // ChallengeScreen::ShowPageButtons (ChallengeScreen.cpp:356-360)
+    // PORT-NOTE (deviation): upstream shows the switcher only with cheat keys and only on the
+    // mini-game page; the hidden-content enablement drops the cheat-key gate and also shows it on
+    // the limbo page (so there is a way back). The survival and puzzle pages keep no switcher, and
+    // their buttons stay hidden (next loop).
     public boolean showPageButtons() {
-        return mApp.mCheatKeys && mPageIndex != ChallengePage.CHALLENGE_PAGE_SURVIVAL
-                && mPageIndex != ChallengePage.CHALLENGE_PAGE_PUZZLE;
+        return mPageIndex == ChallengePage.CHALLENGE_PAGE_CHALLENGE
+                || mPageIndex == ChallengePage.CHALLENGE_PAGE_LIMBO;
     }
 
     // ChallengeScreen::UpdateButtons (ChallengeScreen.cpp:362-384)
     public void updateButtons() {
         for (int aChallengeMode = 0; aChallengeMode < NUM_CHALLENGE_MODES; aChallengeMode++) {
-            mChallengeButtons[aChallengeMode].mVisible =
-                    getChallengeDefinition(aChallengeMode).mPage == mPageIndex;
+            ChallengeDefinition aDef = getChallengeDefinition(aChallengeMode);
+            // Port addition: the squirrel tech demo stays off the re-laid-out limbo page (upstream
+            // parked it in intro's cell at (2,3), where intro drew over it — it was never actually
+            // visible in retail; see the gChallengeDefs PORT-NOTE).
+            boolean aHidden = aDef.mPage == ChallengePage.CHALLENGE_PAGE_LIMBO
+                    && aDef.mChallengeMode == CHALLENGE_LIMBO_HIDDEN_MODE;
+            mChallengeButtons[aChallengeMode].mVisible = !aHidden && aDef.mPage == mPageIndex;
         }
         for (int aPage = 0; aPage < ChallengePage.MAX_CHALLANGE_PAGES; aPage++) {
             ButtonWidget aPageButton = mPageButton[aPage];
 
-            if (mLimboPageUnlocked && aPage == ChallengePage.CHALLENGE_PAGE_LIMBO) {
-                aPageButton.mVisible = true;
-            }
-
+            // PORT-NOTE (deviation): upstream revealed the limbo button only after the five-click
+            // easter egg (ChallengeScreen.cpp:751-771 sets mLimboPageUnlocked); the switcher shows
+            // on the mini-game and limbo pages unconditionally now, so the easter egg no longer
+            // gates anything (kept as upstream trace in mouseDown).
             if (aPage == mPageIndex) {
                 aPageButton.setLabelColor(new Color(64, 64, 64));
                 aPageButton.mDisabled = true;
@@ -435,6 +486,22 @@ public class ChallengeScreen extends Widget implements ButtonListener {
             aTrophiesNeeded = 1;
         }
         return mCheatEnableChallenges ? 0 : aTrophiesNeeded;
+    }
+
+    /**
+     * Resolves a challenge name for display. Bracketed names go through the table as upstream;
+     * the four unbracketed upstream literals were never visible before the limbo page was
+     * surfaced, and the retail table banks localized text under the same-named keys
+     * ([SQUIRREL]/[TREE_OF_WISDOM]/[UPSELL]/[INTRO]) — so a raw name prefers the banked text
+     * ("Tree of Wisdom" → [TREE_OF_WISDOM]) and falls back to the literal when a PAK does not
+     * carry the key. Port addition (see drawButton).
+     */
+    public static String resolveChallengeName(String theName) {
+        if (theName.startsWith("[")) {
+            return PvzpStringFile.translate(theName);
+        }
+        return PvzpStringFile.tryTranslate("[" + theName.replace(' ', '_').toUpperCase() + "]")
+                .orElse(theName);
     }
 
     // ChallengeScreen::DrawButton (ChallengeScreen.cpp:395-566)
@@ -484,7 +551,7 @@ public class ChallengeScreen extends Widget implements ButtonListener {
 
             // draw the challenge name
             Color aTextColor = aHighLight ? new Color(250, 40, 40) : new Color(42, 42, 90);
-            String aName = PvzpStringFile.translate(aDef.mChallengeName);
+            String aName = resolveChallengeName(aDef.mChallengeName);
             if (aChallengeButton.mDisabled
                     || (theChallengeIndex == mUnlockChallengeIndex && mUnlockState == UnlockingState.UNLOCK_SHAKING)) {
                 aName = "?";
@@ -542,6 +609,7 @@ public class ChallengeScreen extends Widget implements ButtonListener {
 
             // draw the lock or completion images and the best record text
             int aRecord = mApp.mPlayerInfo.mChallengeRecords[theChallengeIndex];
+            // Port addition: showcase entries never draw a completion badge (isShowcaseEntry).
             if (theChallengeIndex == mUnlockChallengeIndex) {
                 Image aLockImage = Resources.getImageById(Resources.IMAGE_LOCK_ID);
                 if (mUnlockState == UnlockingState.UNLOCK_FADING) {
@@ -553,7 +621,7 @@ public class ChallengeScreen extends Widget implements ButtonListener {
                 PvzpCommon.pvzpDrawImageScaledF(g, aLockImage, aPosX + 24 + mLockShakeX, aPosY + 9 + mLockShakeY,
                         0.7f, 0.7f);
                 g.setColorizeImages(false);
-            } else if (aRecord > 0) {
+            } else if (!isShowcaseEntry(aDef.mChallengeMode) && aRecord > 0) {
                 if (mApp.hasBeatenChallenge(aDef.mChallengeMode)) {
                     g.drawImage(Resources.getImageById(Resources.IMAGE_MINIGAME_TROPHY_ID), aPosX - 6, aPosY - 2);
                 } else if (LawnApp.isEndlessScaryPotter(aDef.mChallengeMode)
@@ -603,9 +671,7 @@ public class ChallengeScreen extends Widget implements ButtonListener {
                 new Color(220, 220, 220), DrawStringJustification.DS_ALIGN_CENTER);
 
         int aTrophiesGot = mApp.getNumTrophies(mPageIndex);
-        int aTrophiesTotal = mPageIndex == ChallengePage.CHALLENGE_PAGE_SURVIVAL ? 10
-                : mPageIndex == ChallengePage.CHALLENGE_PAGE_CHALLENGE ? 20
-                : mPageIndex == ChallengePage.CHALLENGE_PAGE_PUZZLE ? 18 : 0;
+        int aTrophiesTotal = trophyTotalForPage(mPageIndex);
         if (aTrophiesTotal > 0) {
             String aTrophyString = aTrophiesGot + "/" + aTrophiesTotal;
             PvzpCommon.pvzpDrawString(g, aTrophyString, 739, 73, Resources.getFontById(Resources.FONT_DWARVENTODCRAFT15_ID),
@@ -618,6 +684,27 @@ public class ChallengeScreen extends Widget implements ButtonListener {
         }
 
         mToolTip.draw(g);
+    }
+
+    /**
+     * The trophy counter's per-page total (ChallengeScreen.cpp:577-581). PORT-NOTE (deviation):
+     * the limbo total is a port addition — upstream showed no counter there (total 0), but the
+     * re-laid-out page banks trophies for its 12 playable entries.
+     */
+    public static int trophyTotalForPage(int thePage) {
+        if (thePage == ChallengePage.CHALLENGE_PAGE_SURVIVAL) {
+            return 10;
+        }
+        if (thePage == ChallengePage.CHALLENGE_PAGE_CHALLENGE) {
+            return 20;
+        }
+        if (thePage == ChallengePage.CHALLENGE_PAGE_PUZZLE) {
+            return 18;
+        }
+        if (thePage == ChallengePage.CHALLENGE_PAGE_LIMBO) {
+            return 12;
+        }
+        return 0;
     }
 
     // ChallengeScreen::Update (ChallengeScreen.cpp:594-622)

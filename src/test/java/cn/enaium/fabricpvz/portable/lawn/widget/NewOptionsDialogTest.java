@@ -18,6 +18,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import cn.enaium.fabricpvz.portable.sexy.graphics.Image;
 import cn.enaium.fabricpvz.portable.sexy.graphics.MemoryImage;
+import cn.enaium.fabricpvz.portable.lawn.Dialogs;
 import cn.enaium.fabricpvz.portable.lawn.GameMode;
 import cn.enaium.fabricpvz.portable.lawn.LawnApp;
 import cn.enaium.fabricpvz.portable.lawn.Resources;
@@ -177,6 +178,75 @@ class NewOptionsDialogTest {
                 "restarting a level from the selector makes no sense (NewOptionsDialog.cpp:190-200)");
     }
 
+    /** Port addition: the disclaimer button lives one slot above the credits button, in the
+     * game-selector variant only. */
+    @Test
+    void disclaimerButtonSitsAboveTheCreditsButtonInTheSelector() {
+        LawnApp app = newApp();
+        NewOptionsDialog aDialog = newDialog(app, true);
+
+        assertTrue(aDialog.mDisclaimerButton.mVisible, "the selector options show the disclaimer");
+        assertEquals(aDialog.mBackToMainButton.mX, aDialog.mDisclaimerButton.mX, "same column");
+        assertEquals(aDialog.mBackToMainButton.mY - NewOptionsDialog.OPTIONS_BUTTON_SPACING_Y,
+                aDialog.mDisclaimerButton.mY, "one button slot above the credits button");
+        assertEquals(NewOptionsDialog.OPTIONS_BUTTON_WIDTH, aDialog.mDisclaimerButton.mWidth);
+        assertEquals(NewOptionsDialog.OPTIONS_BUTTON_HEIGHT, aDialog.mDisclaimerButton.mHeight);
+    }
+
+    /** The disclaimer is a main-menu feature; the in-level pause dialog keeps the restart slot. */
+    @Test
+    void disclaimerButtonIsHiddenInLevel() {
+        LawnApp app = newApp();
+        NewOptionsDialog aDialog = newDialog(app, false);
+
+        assertFalse(aDialog.mDisclaimerButton.mVisible);
+    }
+
+    /** The label, the popup title and the popup's OK button all resolve the DISCLAIMER key, with
+     * the English default when the table does not bank it (other retail distributions). */
+    @Test
+    void disclaimerTextsResolveTheDisclaimerKeyWithAnEnglishDefault() {
+        LawnApp app = newApp();
+        app.mStringProperties.put("DISCLAIMER", "免责声明");
+        NewOptionsDialog aDialog = newDialog(app, true);
+        assertEquals("免责声明", aDialog.mDisclaimerButton.mLabel, "the LawnStrings entry wins");
+
+        // The label resolves at construction time, so the default needs a fresh dialog.
+        app.mStringProperties.remove("DISCLAIMER");
+        NewOptionsDialog aDefaultDialog = newDialog(app, true);
+        assertEquals("Disclaimer", aDefaultDialog.mDisclaimerButton.mLabel, "the English default");
+    }
+
+    /** Pressing the button opens the standard LawnDialog popup: DISCLAIMER title, the policy
+     * paragraph body, and the standard OK confirmation button. */
+    @Test
+    void disclaimerButtonOpensThePolicyPopupWithAnOkButton() {
+        LawnApp app = newApp();
+        app.mStringProperties.put("DISCLAIMER", "免责声明");
+        app.mStringProperties.put("DIALOG_BUTTON_OK", "确定");
+        NewOptionsDialog aDialog = newDialog(app, true);
+
+        aDialog.buttonDepress(NewOptionsDialog.NewOptionsDialog_Disclaimer);
+
+        LawnDialog aPopup = (LawnDialog) app.getDialog(Dialogs.DIALOG_INFO);
+        assertTrue(aPopup != null, "the popup must be open");
+        assertEquals("免责声明", aPopup.mDialogHeader, "the title carries the DISCLAIMER text");
+        assertEquals(NewOptionsDialog.DISCLAIMER_TEXT, aPopup.mDialogLines, "the body is the policy text");
+        assertTrue(aPopup.mLawnYesButton != null, "BUTTONS_FOOTER provides the OK button");
+        assertEquals("确定", aPopup.mLawnYesButton.mLabel, "the button is the standard OK confirmation");
+    }
+
+    /** The body keeps the disclaimer's three sentences, arranged as policy paragraphs. */
+    @Test
+    void disclaimerTextIsThreePolicyParagraphs() {
+        String[] aParagraphs = NewOptionsDialog.DISCLAIMER_TEXT.split("\n\n");
+        assertEquals(3, aParagraphs.length, "three paragraphs");
+        assertTrue(aParagraphs[0].startsWith("This is an unofficial Mod"), "permitted under the policy");
+        assertTrue(aParagraphs[1].startsWith("Plant vs. Zombies game materials"), "EA owns the materials");
+        assertTrue(aParagraphs[2].startsWith("Electronic Arts and PopCap have not endorsed"),
+                "no endorsement");
+    }
+
     @Test
     void musicSliderValueIsStoredVerbatim() {
         LawnApp app = newApp();
@@ -210,6 +280,7 @@ class NewOptionsDialogTest {
         // A port addition beyond the upstream enum.
         assertEquals(8, NewOptionsDialog.NewOptionsDialog_AutoPause);
         assertEquals(9, NewOptionsDialog.NewOptionsDialog_DebugInfo);
+        assertEquals(10, NewOptionsDialog.NewOptionsDialog_Disclaimer);
     }
 
     /** The debug-overlay checkbox sits in the left column, vertically aligned with the fullscreen row. */

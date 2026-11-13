@@ -26,11 +26,16 @@ class ChallengeTablesTest {
             10, 20, 20, 30, 20, 20, 30, 20, 30, 30,
     };
 
-    /** ../verification/research/04-reanim-ui.md §3.1: page totals of the 72 {@code gChallengeDefs} rows. */
-    private static final int GOLDEN_SURVIVAL_PAGE_COUNT = 11;
+    /**
+     * ../verification/research/04-reanim-ui.md §3.1: page totals of the 72 {@code gChallengeDefs}
+     * rows. PORT-NOTE (deviation): upstream banks 11 survival / 21 limbo rows — the hidden-content
+     * enablement moves the four endless variants (day/night/fog/roof) from limbo row 3 onto the
+     * survival page's endless row, so this port shows 15 / 17.
+     */
+    private static final int GOLDEN_SURVIVAL_PAGE_COUNT = 15;
 
     private static final int GOLDEN_CHALLENGE_PAGE_COUNT = 20;
-    private static final int GOLDEN_LIMBO_PAGE_COUNT = 21;
+    private static final int GOLDEN_LIMBO_PAGE_COUNT = 17;
     private static final int GOLDEN_PUZZLE_PAGE_COUNT = 20;
     private static final int GOLDEN_CHALLENGE_DEF_COUNT = 72;
 
@@ -208,13 +213,27 @@ class ChallengeTablesTest {
         assertEquals(0, aSurvivalDay.mCol);
         assertEquals("[SURVIVAL_DAY_NORMAL]", aSurvivalDay.mChallengeName);
 
-        // Endless stage 3 is the only endless row that stays on the Survival page (:52).
+        // Endless stage 3 is the endless row retail already shows on the Survival page (:52); the
+        // hidden-content enablement put the other four around it (see challengeDefinitions...).
         ChallengeDefinition aEndlessPool = challengeDefForMode(GameMode.GAMEMODE_SURVIVAL_ENDLESS_STAGE_3);
         assertEquals(ChallengePage.CHALLENGE_PAGE_SURVIVAL, aEndlessPool.mPage);
         assertEquals(2, aEndlessPool.mRow);
         assertEquals(2, aEndlessPool.mCol);
         assertEquals(10, aEndlessPool.mChallengeIconIndex);
         assertEquals("[SURVIVAL_POOL_ENDLESS]", aEndlessPool.mChallengeName);
+
+        // PORT-NOTE (deviation): the four endless variants upstream banks on the limbo page
+        // (row 3, ChallengeScreen.cpp:50-54) surface on the Survival page's endless row.
+        int[] anEndlessStages = {
+                GameMode.GAMEMODE_SURVIVAL_ENDLESS_STAGE_1, GameMode.GAMEMODE_SURVIVAL_ENDLESS_STAGE_2,
+                GameMode.GAMEMODE_SURVIVAL_ENDLESS_STAGE_4, GameMode.GAMEMODE_SURVIVAL_ENDLESS_STAGE_5};
+        int[] anEndlessCols = {0, 1, 3, 4};
+        for (int i = 0; i < anEndlessStages.length; i++) {
+            ChallengeDefinition aDef = challengeDefForMode(anEndlessStages[i]);
+            assertEquals(ChallengePage.CHALLENGE_PAGE_SURVIVAL, aDef.mPage, "endless stage on survival page");
+            assertEquals(2, aDef.mRow, "the endless row");
+            assertEquals(anEndlessCols[i], aDef.mCol, "around the pool endless entry");
+        }
 
         ChallengeDefinition aBeghouledTwist = challengeDefForMode(GameMode.GAMEMODE_CHALLENGE_BEGHOULED_TWIST);
         assertEquals(20, aBeghouledTwist.mChallengeIconIndex); // :63
@@ -237,6 +256,9 @@ class ChallengeTablesTest {
         assertEquals("[I_ZOMBIE_ENDLESS]", aIZombieEndless.mChallengeName);
 
         // The three rows whose names are not [BRACKETED] upstream literals (:88, :89, :110, :111).
+        // PORT-NOTE (deviation): the showcase entries carry the limbo re-layout's coordinates
+        // (separated row 2, cols 1-4 — see ChallengeScreen.gChallengeDefs); the squirrel demo
+        // keeps upstream cell (2,3), hidden UI-side.
         ChallengeDefinition aSquirrel = challengeDefForMode(GameMode.GAMEMODE_CHALLENGE_SQUIRREL);
         assertEquals(ChallengePage.CHALLENGE_PAGE_LIMBO, aSquirrel.mPage);
         assertEquals(2, aSquirrel.mRow);
@@ -246,19 +268,19 @@ class ChallengeTablesTest {
         ChallengeDefinition aTree = challengeDefForMode(GameMode.GAMEMODE_TREE_OF_WISDOM);
         assertEquals(ChallengePage.CHALLENGE_PAGE_LIMBO, aTree.mPage);
         assertEquals(2, aTree.mRow);
-        assertEquals(4, aTree.mCol);
+        assertEquals(2, aTree.mCol);
         assertEquals("Tree of Wisdom", aTree.mChallengeName);
 
         ChallengeDefinition anUpsell = challengeDefForMode(GameMode.GAMEMODE_UPSELL);
         assertEquals(ChallengePage.CHALLENGE_PAGE_LIMBO, anUpsell.mPage);
-        assertEquals(3, anUpsell.mRow);
-        assertEquals(4, anUpsell.mCol);
+        assertEquals(2, anUpsell.mRow);
+        assertEquals(3, anUpsell.mCol);
         assertEquals("Upsell", anUpsell.mChallengeName);
 
         ChallengeDefinition anIntro = challengeDefForMode(GameMode.GAMEMODE_INTRO);
         assertEquals(ChallengePage.CHALLENGE_PAGE_LIMBO, anIntro.mPage);
         assertEquals(2, anIntro.mRow);
-        assertEquals(3, anIntro.mCol);
+        assertEquals(4, anIntro.mCol);
         assertEquals("Intro", anIntro.mChallengeName);
     }
 

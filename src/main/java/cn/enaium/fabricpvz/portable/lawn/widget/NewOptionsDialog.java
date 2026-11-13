@@ -2,7 +2,8 @@
  * Ported from src/Lawn/Widget/NewOptionsDialog.h:37-81 and src/Lawn/Widget/NewOptionsDialog.cpp:39-390.
  *
  * The pause/options dialog: music and sound-effect sliders, a full-screen and a hardware
- * acceleration checkbox, and the almanac / restart / main-menu / back-to-game buttons.
+ * acceleration checkbox, and the almanac / restart / main-menu / back-to-game buttons (plus a
+ * disclaimer button in the game-selector variant - a port addition).
  *
  * Porting notes:
  *  - Upstream derives directly from Sexy::Dialog (not LawnDialog); the dialog id stays
@@ -58,6 +59,21 @@ public class NewOptionsDialog extends Dialog implements SliderListener, Checkbox
     public static final int NewOptionsDialog_AutoPause = 8;
     /** A port addition beyond the upstream enum: the F3 debug-overlay checkbox. */
     public static final int NewOptionsDialog_DebugInfo = 9;
+    /** A port addition beyond the upstream enum: the disclaimer button. */
+    public static final int NewOptionsDialog_Disclaimer = 10;
+
+    /**
+     * The disclaimer body shown in the popup (a port addition, not in upstream). The disclaimer's
+     * three sentences, arranged as policy paragraphs (the LawnDialog word-wraps within a paragraph
+     * and sizes itself from the wrapped height, LawnDialog.cpp:142-149). The original text ran the
+     * sentences together ("unofficialMod"); the missing space is restored.
+     */
+    public static final String DISCLAIMER_TEXT =
+            "This is an unofficial Mod permitted under the Plants vs. Zombies Mod Policy.\n\n"
+                    + "Plant vs. Zombies game materials, copyrights, and trademarks are the"
+                    + " property of Electronic Arts Inc.\n\n"
+                    + "Electronic Arts and PopCap have not endorsed and are not responsible for"
+                    + " the operation or content of this Mod.";
 
     // NewOptionsDialog.cpp:150-157 — layout table (dialog-local coordinates)
     public static final int MUSIC_SLIDER_X = 199;
@@ -147,6 +163,7 @@ public class NewOptionsDialog extends Dialog implements SliderListener, Checkbox
     public LawnStoneButton mAlmanacButton;
     public LawnStoneButton mBackToMainButton;
     public LawnStoneButton mRestartButton;
+    public LawnStoneButton mDisclaimerButton;
     public NewLawnButton mBackToGameButton;
     public boolean mFromGameSelector;
 
@@ -167,6 +184,14 @@ public class NewOptionsDialog extends Dialog implements SliderListener, Checkbox
         // banked under RESTART_BUTTON ("重新开始"), so this port resolves that key instead.
         mRestartButton = GameButton.makeButton(NewOptionsDialog_Restart, this, "[RESTART_BUTTON]");
         mBackToMainButton = GameButton.makeButton(NewOptionsDialog_MainMenu, this, "[MAIN_MENU_BUTTON]");
+        // A port addition: the disclaimer button lives only in the game-selector variant, one
+        // button slot above the credits button. The label, the popup's title and the popup's OK
+        // button all resolve the DISCLAIMER key (English default; a LawnStrings entry overrides).
+        mDisclaimerButton = GameButton.makeButton(
+                NewOptionsDialog_Disclaimer, this, theApp.getString("DISCLAIMER", "Disclaimer"));
+        if (!theFromGameSelector) {
+            mDisclaimerButton.setVisible(false);
+        }
 
         mBackToGameButton = GameButton.makeNewButton(
                 Dialog.ID_OK,
@@ -264,6 +289,7 @@ public class NewOptionsDialog extends Dialog implements SliderListener, Checkbox
         addWidget(mAlmanacButton);
         addWidget(mRestartButton);
         addWidget(mBackToMainButton);
+        addWidget(mDisclaimerButton);
         addWidget(mMusicVolumeSlider);
         addWidget(mSfxVolumeSlider);
         addWidget(mHardwareAccelerationCheckbox);
@@ -285,6 +311,7 @@ public class NewOptionsDialog extends Dialog implements SliderListener, Checkbox
         removeWidget(mAutoPauseCheckbox);
         removeWidget(mDebugInfoCheckbox);
         removeWidget(mBackToMainButton);
+        removeWidget(mDisclaimerButton);
         removeWidget(mBackToGameButton);
         removeWidget(mRestartButton);
     }
@@ -313,6 +340,10 @@ public class NewOptionsDialog extends Dialog implements SliderListener, Checkbox
         mRestartButton.resize(mAlmanacButton.mX, mAlmanacButton.mY + OPTIONS_BUTTON_SPACING_Y,
                 OPTIONS_BUTTON_WIDTH, OPTIONS_BUTTON_HEIGHT);
         mBackToMainButton.resize(mRestartButton.mX, mRestartButton.mY + OPTIONS_BUTTON_SPACING_Y,
+                OPTIONS_BUTTON_WIDTH, OPTIONS_BUTTON_HEIGHT);
+        // Port addition: one button slot above the credits/main-menu button (the slot the restart
+        // button occupies in level; in the selector variant restart is hidden, so the slot is free).
+        mDisclaimerButton.resize(mBackToMainButton.mX, mBackToMainButton.mY - OPTIONS_BUTTON_SPACING_Y,
                 OPTIONS_BUTTON_WIDTH, OPTIONS_BUTTON_HEIGHT);
         mBackToGameButton.resize(BACK_TO_GAME_BUTTON_X, BACK_TO_GAME_BUTTON_Y,
                 mBackToGameButton.mWidth, mBackToGameButton.mHeight);
@@ -544,6 +575,16 @@ public class NewOptionsDialog extends Dialog implements SliderListener, Checkbox
                 // NewOptionsDialog.cpp:388-390 — upstream creates no button with this id (dead case).
                 mApp.checkForUpdates();
                 break;
+
+            case NewOptionsDialog_Disclaimer: {
+                // Port addition: the standard LawnDialog popup; the title carries the DISCLAIMER
+                // text, the body is the disclaimer arranged as policy paragraphs, and the button
+                // is the standard OK confirmation (DIALOG_BUTTON_OK).
+                String aTitle = mApp.getString("DISCLAIMER", "Disclaimer");
+                mApp.doDialog(Dialogs.DIALOG_INFO, true, aTitle, DISCLAIMER_TEXT,
+                        "[DIALOG_BUTTON_OK]", Dialog.BUTTONS_FOOTER);
+                break;
+            }
         }
     }
 }
