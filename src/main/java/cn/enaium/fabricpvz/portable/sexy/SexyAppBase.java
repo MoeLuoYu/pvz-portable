@@ -167,6 +167,8 @@ public class SexyAppBase implements ButtonListener, DialogListener {
     public boolean mTrialLaunch;
     public boolean mDemoLaunch;
     public boolean mDebugLaunch;
+    /** PORT-NOTE (deviation): shows the main-menu "unlock all content" button (see -quickunlock). */
+    public boolean mQuickUnlockLaunch;
 
     public int mRelaxUpdateBacklogCount;
     public int mPreferredX;
@@ -2809,6 +2811,7 @@ public class SexyAppBase implements ButtonListener, DialogListener {
             // and -demo isolate the save data (savedata_trial / savedata_demo); -demo also wires
             // the preview profiles and implies every -debug feature.
             case "-debug" -> mDebugLaunch = true;
+            case "-quickunlock" -> mQuickUnlockLaunch = true;
             case "-trial" -> mTrialLaunch = true;
             case "-demo" -> {
                 mDemoLaunch = true;

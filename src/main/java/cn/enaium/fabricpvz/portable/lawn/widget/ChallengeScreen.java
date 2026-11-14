@@ -9,6 +9,8 @@ import cn.enaium.fabricpvz.portable.lawn.GameMode;
 import cn.enaium.fabricpvz.portable.lawn.GameScenes;
 import cn.enaium.fabricpvz.portable.lawn.LawnApp;
 import cn.enaium.fabricpvz.portable.lawn.MusicTune;
+import java.io.IOException;
+
 import cn.enaium.fabricpvz.portable.lawn.PvzpCurves;
 import cn.enaium.fabricpvz.portable.lawn.Resources;
 import cn.enaium.fabricpvz.portable.lawn.ToolTipWidget;
@@ -19,12 +21,14 @@ import cn.enaium.fabricpvz.portable.pvzp.fx.FoleyType;
 import cn.enaium.fabricpvz.portable.sexy.ButtonListener;
 import cn.enaium.fabricpvz.portable.sexy.ButtonWidget;
 import cn.enaium.fabricpvz.portable.sexy.Color;
+import cn.enaium.fabricpvz.portable.sexy.Common;
 import cn.enaium.fabricpvz.portable.sexy.KeyCode;
 import cn.enaium.fabricpvz.portable.sexy.Rect;
 import cn.enaium.fabricpvz.portable.sexy.Widget;
 import cn.enaium.fabricpvz.portable.sexy.WidgetManager;
 import cn.enaium.fabricpvz.portable.sexy.graphics.Font;
 import cn.enaium.fabricpvz.portable.sexy.graphics.Graphics;
+import cn.enaium.fabricpvz.portable.sexy.graphics.MemoryImage;
 import cn.enaium.fabricpvz.portable.sexy.graphics.Image;
 
 /**
@@ -105,11 +109,11 @@ public class ChallengeScreen extends Widget implements ButtonListener {
         // PORT-NOTE (deviation): upstream banks these four endless variants on the limbo page
         // (row 3, :50-54); the hidden-content enablement surfaces them on the Survival page's
         // endless row around the pool endless entry retail already shows.
-        new ChallengeDefinition(GameMode.GAMEMODE_SURVIVAL_ENDLESS_STAGE_1, 10, ChallengePage.CHALLENGE_PAGE_SURVIVAL, 2, 0, "[SURVIVAL_DAY_ENDLESS]"),
-        new ChallengeDefinition(GameMode.GAMEMODE_SURVIVAL_ENDLESS_STAGE_2, 10, ChallengePage.CHALLENGE_PAGE_SURVIVAL, 2, 1, "[SURVIVAL_NIGHT_ENDLESS]"),
+        new ChallengeDefinition(GameMode.GAMEMODE_SURVIVAL_ENDLESS_STAGE_1, 0, ChallengePage.CHALLENGE_PAGE_SURVIVAL, 2, 0, "[SURVIVAL_DAY_ENDLESS]"),
+        new ChallengeDefinition(GameMode.GAMEMODE_SURVIVAL_ENDLESS_STAGE_2, 1, ChallengePage.CHALLENGE_PAGE_SURVIVAL, 2, 1, "[SURVIVAL_NIGHT_ENDLESS]"),
         new ChallengeDefinition(GameMode.GAMEMODE_SURVIVAL_ENDLESS_STAGE_3, 10, ChallengePage.CHALLENGE_PAGE_SURVIVAL, 2, 2, "[SURVIVAL_POOL_ENDLESS]"),
-        new ChallengeDefinition(GameMode.GAMEMODE_SURVIVAL_ENDLESS_STAGE_4, 10, ChallengePage.CHALLENGE_PAGE_SURVIVAL, 2, 3, "[SURVIVAL_FOG_ENDLESS]"),
-        new ChallengeDefinition(GameMode.GAMEMODE_SURVIVAL_ENDLESS_STAGE_5, 10, ChallengePage.CHALLENGE_PAGE_SURVIVAL, 2, 4, "[SURVIVAL_ROOF_ENDLESS]"),
+        new ChallengeDefinition(GameMode.GAMEMODE_SURVIVAL_ENDLESS_STAGE_4, 3, ChallengePage.CHALLENGE_PAGE_SURVIVAL, 2, 3, "[SURVIVAL_FOG_ENDLESS]"),
+        new ChallengeDefinition(GameMode.GAMEMODE_SURVIVAL_ENDLESS_STAGE_5, 4, ChallengePage.CHALLENGE_PAGE_SURVIVAL, 2, 4, "[SURVIVAL_ROOF_ENDLESS]"),
         new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_WAR_AND_PEAS, 0, ChallengePage.CHALLENGE_PAGE_CHALLENGE, 0, 0, "[WAR_AND_PEAS]"),
         new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_WALLNUT_BOWLING, 6, ChallengePage.CHALLENGE_PAGE_CHALLENGE, 0, 1, "[WALL_NUT_BOWLING]"),
         new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_SLOT_MACHINE, 2, ChallengePage.CHALLENGE_PAGE_CHALLENGE, 0, 2, "[SLOT_MACHINE]"),
@@ -179,6 +183,77 @@ public class ChallengeScreen extends Widget implements ButtonListener {
     // ChallengeScreen.h:50-58
     public NewLawnButton mBackButton;
     public ButtonWidget[] mPageButton = new ButtonWidget[ChallengePage.MAX_CHALLANGE_PAGES];
+
+    // PORT-NOTE (deviation): the four added endless variants read optional pak images
+    // (IMAGE_ENDLESS_*) or loose files (<gameDir>/images/ad/endless_*.jpg) as their covers - the
+    // thumbnail sheet has only one endless cel (pool). Lazy-loaded once per screen instance.
+    private Image[] mEndlessCovers;
+    private boolean mEndlessCoversLoaded;
+
+    /**
+     * The per-cover lookup candidates: pak resource names (the resources.xml id, in the convention
+     * a repack would use) then the loose-file path under the resource folder.
+     */
+    private static final String[][] ENDLESS_COVER_RESOURCES = {
+        {"IMAGE_ENDLESS_DAY", "ENDLESS_DAY", "images/endless_day.jpg", "endless_day.jpg"},
+        {"IMAGE_ENDLESS_NIGHT", "ENDLESS_NIGHT", "images/endless_night.jpg", "endless_night.jpg"},
+        {"IMAGE_ENDLESS_FOG", "ENDLESS_FOG", "images/endless_fog.jpg", "endless_fog.jpg"},
+        {"IMAGE_ENDLESS_ROOF", "ENDLESS_ROOF", "images/endless_roof.jpg", "endless_roof.jpg"},
+    };
+
+    /** The endless-variant index into {@link #mEndlessCovers}, -1 for the other modes. */
+    private static int endlessCoverIndex(int theChallengeMode) {
+        switch (theChallengeMode) {
+            case GameMode.GAMEMODE_SURVIVAL_ENDLESS_STAGE_1:
+                return 0;
+            case GameMode.GAMEMODE_SURVIVAL_ENDLESS_STAGE_2:
+                return 1;
+            case GameMode.GAMEMODE_SURVIVAL_ENDLESS_STAGE_4:
+                return 2;
+            case GameMode.GAMEMODE_SURVIVAL_ENDLESS_STAGE_5:
+                return 3;
+            default:
+                return -1;
+        }
+    }
+
+    /**
+     * Lazy-loads the four endless covers: a pak image under any of the candidate names, or a loose
+     * file at {@code <resourceFolder>/images/ad/endless_*.jpg} - whichever exists. Missing covers
+     * stay null and the button falls back to the thumbnail sheet.
+     */
+    private void loadEndlessCovers() {
+        mEndlessCoversLoaded = true;
+        mEndlessCovers = new Image[4];
+        for (int i = 0; i < 4; i++) {
+            for (String aName : ENDLESS_COVER_RESOURCES[i]) {
+                try {
+                    Image anImage = mApp.mResourceManager.getImageThrow(aName).get();
+                    if (anImage != null) {
+                        mEndlessCovers[i] = anImage;
+                        break;
+                    }
+                } catch (RuntimeException ignored) {
+                    // the pak doesn't carry this cover under that name
+                }
+            }
+            if (mEndlessCovers[i] != null) {
+                continue;
+            }
+            try {
+                java.awt.image.BufferedImage anImage = javax.imageio.ImageIO.read(
+                        new java.io.File(Common.getResourcePath(ENDLESS_COVER_RESOURCES[i][1])));
+                if (anImage != null) {
+                    MemoryImage aMemoryImage = new MemoryImage();
+                    aMemoryImage.setBits(anImage.getRGB(0, 0, anImage.getWidth(), anImage.getHeight(),
+                            null, 0, anImage.getWidth()), anImage.getWidth(), anImage.getHeight(), true);
+                    mEndlessCovers[i] = aMemoryImage;
+                }
+            } catch (IOException | RuntimeException ignored) {
+                // no loose file either - the sheet cel remains the fallback
+            }
+        }
+    }
     public ButtonWidget[] mChallengeButtons = new ButtonWidget[NUM_CHALLENGE_MODES];
     public LawnApp mApp;
     public ToolTipWidget mToolTip;
@@ -559,8 +634,21 @@ public class ChallengeScreen extends Widget implements ButtonListener {
             }
 
             if (mPageIndex == ChallengePage.CHALLENGE_PAGE_SURVIVAL) {
-                g.drawImageCel(Resources.getImageById(Resources.IMAGE_SURVIVAL_THUMBNAILS_ID),
-                        aPosX + 13, aPosY + 4, aDef.mChallengeIconIndex);
+                // PORT-NOTE (deviation): the five endless variants prefer the optional pak images /
+                // loose files (IMAGE_ENDLESS_* / images/ad/endless_*.jpg) as dedicated covers; the
+                // original sheet falls back to each stage's lawn cel (the def index)
+                if (!mEndlessCoversLoaded) {
+                    loadEndlessCovers();
+                }
+                int aCoverIndex = endlessCoverIndex(aDef.mChallengeMode);
+                Image aCover = aCoverIndex != -1 ? mEndlessCovers[aCoverIndex] : null;
+                if (aCover != null) {
+                    g.drawImage(aCover, new Rect(aPosX + 13, aPosY + 4, 80, 65),
+                            new Rect(0, 0, aCover.getWidth(), aCover.getHeight()));
+                } else {
+                    g.drawImageCel(Resources.getImageById(Resources.IMAGE_SURVIVAL_THUMBNAILS_ID),
+                            aPosX + 13, aPosY + 4, aDef.mChallengeIconIndex);
+                }
             } else {
                 g.drawImageCel(Resources.getImageById(Resources.IMAGE_CHALLENGE_THUMBNAILS_ID),
                         aPosX + 13, aPosY + 4, aDef.mChallengeIconIndex);

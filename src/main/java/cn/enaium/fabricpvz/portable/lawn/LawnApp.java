@@ -523,17 +523,29 @@ public class LawnApp extends SexyApp {
      * "Full Unlock" preview profile — one unified unlock state for both entry points.
      */
     public void unlockAllCheat(PlayerInfo thePlayer) {
+        unlockAllCheat(thePlayer, false);
+    }
+
+    /**
+     * PORT-NOTE (deviation): the conditional variant behind the main-menu "unlock all content"
+     * button — {@code thePreserveProgress} keeps everything the save already carries beyond the
+     * unlock state (coins, consumable counts, endless wave counts, the tree height): only lifted
+     * where the save has less, never overwritten downward.
+     */
+    public void unlockAllCheat(PlayerInfo thePlayer, boolean thePreserveProgress) {
         PlayerInfo aPlayer = thePlayer;
         if (aPlayer == null) {
             return;
         }
 
-        aPlayer.mLevel = 1;
+        if (!thePreserveProgress) {
+            aPlayer.mLevel = 1;
+        }
         aPlayer.mFinishedAdventure = 1;
         aPlayer.mHasUnlockedMinigames = 1;
         aPlayer.mHasUnlockedPuzzleMode = 1;
         aPlayer.mHasUnlockedSurvivalMode = 1;
-        aPlayer.mCoins = 999990;
+        aPlayer.mCoins = thePreserveProgress ? Math.max(aPlayer.mCoins, 999990) : 999990;
 
         for (int aMode = GameMode.GAMEMODE_SURVIVAL_NORMAL_STAGE_1; aMode < GameMode.NUM_GAME_MODES; aMode++) {
             int aIndex = aMode - GameMode.GAMEMODE_SURVIVAL_NORMAL_STAGE_1;
@@ -541,41 +553,52 @@ public class LawnApp extends SexyApp {
                 continue;
             }
             if (aMode == GameMode.GAMEMODE_TREE_OF_WISDOM) {
-                aPlayer.mChallengeRecords[aIndex] = 500;
+                // the tree height lives in its record slot: never lowered
+                aPlayer.mChallengeRecords[aIndex] = Math.max(aPlayer.mChallengeRecords[aIndex], 500);
                 continue;
             }
+            int aUnlock = 1;
             if (isSurvivalNormal(aMode)) {
-                aPlayer.mChallengeRecords[aIndex] = GameConstants.SURVIVAL_NORMAL_FLAGS;
+                aUnlock = GameConstants.SURVIVAL_NORMAL_FLAGS;
             } else if (isSurvivalHard(aMode)) {
-                aPlayer.mChallengeRecords[aIndex] = GameConstants.SURVIVAL_HARD_FLAGS;
+                aUnlock = GameConstants.SURVIVAL_HARD_FLAGS;
+            }
+            if (thePreserveProgress) {
+                aPlayer.mChallengeRecords[aIndex] = Math.max(aPlayer.mChallengeRecords[aIndex], aUnlock);
             } else {
-                aPlayer.mChallengeRecords[aIndex] = 1;
+                aPlayer.mChallengeRecords[aIndex] = aUnlock;
             }
         }
 
         for (int aItem = 0; aItem <= StoreItem.STORE_ITEM_FIRSTAID; aItem++) {
+            int aUnlock;
             switch (aItem) {
                 case StoreItem.STORE_ITEM_FERTILIZER:
                 case StoreItem.STORE_ITEM_BUG_SPRAY:
                 case StoreItem.STORE_ITEM_CHOCOLATE:
-                    aPlayer.mPurchases[aItem] = PlayerInfo.PURCHASE_COUNT_OFFSET + 100;
-                    break;
                 case StoreItem.STORE_ITEM_TREE_FOOD:
-                    aPlayer.mPurchases[aItem] = PlayerInfo.PURCHASE_COUNT_OFFSET + 100;
+                    aUnlock = PlayerInfo.PURCHASE_COUNT_OFFSET + 100;
                     break;
                 case StoreItem.STORE_ITEM_PACKET_UPGRADE:
                     // the seed bank holds purchases + 6 slots (Board.cpp:~2356) — all four
                     // upgrades make the full 10-slot tray
-                    aPlayer.mPurchases[aItem] = 4;
+                    aUnlock = 4;
                     break;
                 default:
-                    aPlayer.mPurchases[aItem] = 1;
+                    aUnlock = 1;
                     break;
+            }
+            if (thePreserveProgress) {
+                aPlayer.mPurchases[aItem] = Math.max(aPlayer.mPurchases[aItem], aUnlock);
+            } else {
+                aPlayer.mPurchases[aItem] = aUnlock;
             }
         }
 
         java.util.Arrays.fill(aPlayer.mEarnedAchievements, true);
         java.util.Arrays.fill(aPlayer.mShownAchievements, true);
+        // the already-unlocked marker the main-menu button checks ([ALREADY_UNLOCKED])
+        aPlayer.mHasUsedCheatKeys = 1;
         mProfileMgr.save();
     }
 

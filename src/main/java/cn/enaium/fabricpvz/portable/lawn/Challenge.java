@@ -365,12 +365,15 @@ public class Challenge {
             new ChallengeDefinition(GameMode.GAMEMODE_SURVIVAL_HARD_STAGE_5, 9, ChallengePage.CHALLENGE_PAGE_SURVIVAL, 1, 4, "[SURVIVAL_ROOF_HARD]"), // :49
             // ChallengeScreen.cpp:50-54 - survival endless stage 1-5. PORT-NOTE (deviation): upstream
             // banks endless 1/2/4/5 on the limbo page (row 3); the hidden-content enablement surfaces
-            // all five on the Survival page's endless row (see ChallengeScreen.gChallengeDefs).
-            new ChallengeDefinition(GameMode.GAMEMODE_SURVIVAL_ENDLESS_STAGE_1, 10, ChallengePage.CHALLENGE_PAGE_SURVIVAL, 2, 0, "[SURVIVAL_DAY_ENDLESS]"), // :50
-            new ChallengeDefinition(GameMode.GAMEMODE_SURVIVAL_ENDLESS_STAGE_2, 10, ChallengePage.CHALLENGE_PAGE_SURVIVAL, 2, 1, "[SURVIVAL_NIGHT_ENDLESS]"), // :51
+            // all five on the Survival page's endless row (see ChallengeScreen.gChallengeDefs). The
+            // icon indices deviate too: upstream pins all five to cel 10 (the only endless cover the
+            // thumbnail sheet carries) - the four added variants use their stage's lawn cel instead
+            // (0/1/3/4), so each cover matches its lawn; the pool endless keeps the dedicated cel.
+            new ChallengeDefinition(GameMode.GAMEMODE_SURVIVAL_ENDLESS_STAGE_1, 0, ChallengePage.CHALLENGE_PAGE_SURVIVAL, 2, 0, "[SURVIVAL_DAY_ENDLESS]"), // :50
+            new ChallengeDefinition(GameMode.GAMEMODE_SURVIVAL_ENDLESS_STAGE_2, 1, ChallengePage.CHALLENGE_PAGE_SURVIVAL, 2, 1, "[SURVIVAL_NIGHT_ENDLESS]"), // :51
             new ChallengeDefinition(GameMode.GAMEMODE_SURVIVAL_ENDLESS_STAGE_3, 10, ChallengePage.CHALLENGE_PAGE_SURVIVAL, 2, 2, "[SURVIVAL_POOL_ENDLESS]"), // :52
-            new ChallengeDefinition(GameMode.GAMEMODE_SURVIVAL_ENDLESS_STAGE_4, 10, ChallengePage.CHALLENGE_PAGE_SURVIVAL, 2, 3, "[SURVIVAL_FOG_ENDLESS]"), // :53
-            new ChallengeDefinition(GameMode.GAMEMODE_SURVIVAL_ENDLESS_STAGE_5, 10, ChallengePage.CHALLENGE_PAGE_SURVIVAL, 2, 4, "[SURVIVAL_ROOF_ENDLESS]"), // :54
+            new ChallengeDefinition(GameMode.GAMEMODE_SURVIVAL_ENDLESS_STAGE_4, 3, ChallengePage.CHALLENGE_PAGE_SURVIVAL, 2, 3, "[SURVIVAL_FOG_ENDLESS]"), // :53
+            new ChallengeDefinition(GameMode.GAMEMODE_SURVIVAL_ENDLESS_STAGE_5, 4, ChallengePage.CHALLENGE_PAGE_SURVIVAL, 2, 4, "[SURVIVAL_ROOF_ENDLESS]"), // :54
             // ChallengeScreen.cpp:55-74 - the 20 CHALLENGE-page mini-games
             new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_WAR_AND_PEAS, 0, ChallengePage.CHALLENGE_PAGE_CHALLENGE, 0, 0, "[WAR_AND_PEAS]"), // :55
             new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_WALLNUT_BOWLING, 6, ChallengePage.CHALLENGE_PAGE_CHALLENGE, 0, 1, "[WALL_NUT_BOWLING]"), // :56

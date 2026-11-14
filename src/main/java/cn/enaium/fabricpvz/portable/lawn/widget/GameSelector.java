@@ -17,6 +17,7 @@
  */
 package cn.enaium.fabricpvz.portable.lawn.widget;
 
+import java.io.IOException;
 import java.util.Locale;
 
 import cn.enaium.fabricpvz.portable.lawn.AchievementId;
@@ -53,6 +54,7 @@ import cn.enaium.fabricpvz.portable.pvzp.reanim.ReanimatorTransform;
 import cn.enaium.fabricpvz.portable.pvzp.reanim.Reanimation;
 import cn.enaium.fabricpvz.portable.sexy.ButtonListener;
 import cn.enaium.fabricpvz.portable.sexy.Color;
+import cn.enaium.fabricpvz.portable.sexy.Common;
 import cn.enaium.fabricpvz.portable.sexy.Dialog;
 import cn.enaium.fabricpvz.portable.sexy.DialogButton;
 import cn.enaium.fabricpvz.portable.sexy.KeyCode;
@@ -62,6 +64,7 @@ import cn.enaium.fabricpvz.portable.sexy.SexyVector2;
 import cn.enaium.fabricpvz.portable.sexy.Widget;
 import cn.enaium.fabricpvz.portable.sexy.WidgetManager;
 import cn.enaium.fabricpvz.portable.sexy.graphics.Graphics;
+import cn.enaium.fabricpvz.portable.sexy.graphics.MemoryImage;
 import cn.enaium.fabricpvz.portable.sexy.graphics.Image;
 
 /**
@@ -91,6 +94,7 @@ public class GameSelector extends Widget implements ButtonListener {
     public static final int GameSelector_Survival = 110;
     public static final int GameSelector_Zombatar = 111;
     public static final int GameSelector_Achievements = 112;
+    public static final int GameSelector_UnlockAll = 113;
 
     // GameSelector.cpp:168 (mAchievementsButton->Resize(20, mApp->mHeight - PEDESTAL->mHeight - 35, ...))
     public static final int ACHIEVEMENTS_BUTTON_X = 20;
@@ -127,6 +131,12 @@ public class GameSelector extends Widget implements ButtonListener {
     public NewLawnButton mChangeUserButton;
     public NewLawnButton mZombatarButton; // +0xC0
     public NewLawnButton mAchievementsButton; // +0xC4
+    /** PORT-NOTE (deviation): the "unlock all content" button (images/Unlock_*.png, no upstream equivalent). */
+    public NewLawnButton mUnlockAllButton;
+    private boolean mUnlockButtonImagesLoaded;
+    private Image mUnlockNormal;
+    private Image mUnlockHighlight;
+    private Image mUnlockPress;
     public Widget mOverlayWidget;
     public boolean mStartingGame;
     public int mStartingGameCounter;
@@ -345,6 +355,38 @@ public class GameSelector extends Widget implements ButtonListener {
         mAchievementsButton.mBtnNoDraw = mHasTrophy;
         mAchievementsButton.mMouseVisible = false;
 
+        // PORT-NOTE (deviation): the "unlock all content" button (images/Unlock_*.png, no upstream
+        // equivalent) - applies the conditional unlock (LawnApp.unlockAllCheat with progress
+        // preservation) to the current profile. Shows only with the -quickunlock launch parameter,
+        // and hidden when the three images are missing.
+        if (!mApp.mQuickUnlockLaunch) {
+            mUnlockButtonImagesLoaded = true; // nothing to load, the button stays hidden
+        }
+        loadUnlockButtonImages();
+        if (mApp.mQuickUnlockLaunch && mUnlockNormal != null && mUnlockHighlight != null
+                && mUnlockPress != null) {
+            mUnlockAllButton = GameButton.makeNewButton(GameSelector_UnlockAll, this, "", null,
+                    mUnlockNormal, mUnlockHighlight, mUnlockPress);
+            mUnlockAllButton.resize(0, 0, 110, 105);
+            mUnlockAllButton.mDoFinger = true;
+            if (mApp.mPlayerInfo != null && mApp.mPlayerInfo.mHasUsedCheatKeys != 0) {
+                // an already-unlocked save shows the pressed art permanently
+                mUnlockAllButton.mButtonImage = mUnlockPress;
+                mUnlockAllButton.mOverImage = mUnlockPress;
+                mUnlockAllButton.mDownImage = mUnlockPress;
+                mUnlockAllButton.mButtonOffsetX = 2;
+                mUnlockAllButton.mButtonOffsetY = 2;
+            }
+            // the click area trims 8px left / ~10px top / 30px right (transparent edges and the
+            // overhanging parts) and ends 24px above the image bottom, keeping the
+            // pot-overhanging shadow unclickable
+            mUnlockAllButton.mUsePolygonShape = true;
+            mUnlockAllButton.mPolygonShape[0] = new SexyVector2(8.0f, 10.0f);
+            mUnlockAllButton.mPolygonShape[1] = new SexyVector2(65.0f, 10.0f);
+            mUnlockAllButton.mPolygonShape[2] = new SexyVector2(65.0f, 81.0f);
+            mUnlockAllButton.mPolygonShape[3] = new SexyVector2(8.0f, 81.0f);
+        }
+
         mZenGardenButton = GameButton.makeNewButton(
                 GameSelector_ZenGarden,
                 this,
@@ -523,6 +565,9 @@ public class GameSelector extends Widget implements ButtonListener {
         addWidget(mHelpButton);
         addWidget(mStoreButton);
         addWidget(mAlmanacButton);
+        if (mUnlockAllButton != null) {
+            addWidget(mUnlockAllButton);
+        }
         addWidget(mOverlayWidget);
     }
 
@@ -1160,6 +1205,10 @@ public class GameSelector extends Widget implements ButtonListener {
         trackButton(mHelpButton, "SelectorScreen_BG_Right", 576.0f, 458.0f);
         trackButton(mAlmanacButton, "SelectorScreen_BG_Right", 256.0f, 387.0f);
         trackButton(mStoreButton, "SelectorScreen_BG_Right", 334.0f, 441.0f);
+        if (mUnlockAllButton != null) {
+            // the same tombstone binding as help/quit, raised a button-height above them
+            trackButton(mUnlockAllButton, "SelectorScreen_BG_Right", 644.0f - 74.0f + 88.0f - 44.0f + 11.0f, 372.0f - 74.0f - 11.0f);
+        }
         trackButton(mChangeUserButton, "woodsign2", 24.0f, 10.0f);
         trackButton(mZombatarButton, "woodsign3", 0.f, 0.f);
         trackButton(mAchievementsButton, "SelectorScreen_BG_Left", 20.f, 480.f);
@@ -1299,6 +1348,45 @@ public class GameSelector extends Widget implements ButtonListener {
             mApp.unlockAllCheat();
             syncProfile(false);
         }
+    }
+
+    /**
+     * PORT-NOTE (deviation): loads the three button images from {@code images/Unlock_*.png} in the
+     * game directory (no upstream equivalent); null when a file is missing.
+     */
+    private Image loadUnlockImage(String theBaseName) {
+        // the images/Unlock_*.png files load through the pak-transparent file channel: a repacked
+        // main.pak carries them at images/Unlock_*.png, an unpacked install at images/*.png - the
+        // same path serves both
+        try (cn.enaium.fabricpvz.portable.sexy.pak.PakFileHandle aFile =
+                cn.enaium.fabricpvz.portable.sexy.pak.PakInterface.getInstance()
+                        .open("images/" + theBaseName + ".png", "rb")) {
+            if (aFile == null) {
+                return null;
+            }
+            byte[] aPng = aFile.readAllBytes();
+            java.awt.image.BufferedImage anImage = javax.imageio.ImageIO
+                    .read(new java.io.ByteArrayInputStream(aPng));
+            if (anImage != null) {
+                MemoryImage aMemoryImage = new MemoryImage();
+                aMemoryImage.setBits(anImage.getRGB(0, 0, anImage.getWidth(), anImage.getHeight(),
+                        null, 0, anImage.getWidth()), anImage.getWidth(), anImage.getHeight(), true);
+                return aMemoryImage;
+            }
+        } catch (IOException | RuntimeException ignored) {
+            // the file is optional - the button stays hidden without all three
+        }
+        return null;
+    }
+
+    private void loadUnlockButtonImages() {
+        if (mUnlockButtonImagesLoaded) {
+            return;
+        }
+        mUnlockButtonImagesLoaded = true;
+        mUnlockNormal = loadUnlockImage("Unlock_Normal");
+        mUnlockHighlight = loadUnlockImage("Unlock_Highlight");
+        mUnlockPress = loadUnlockImage("Unlock_Press");
     }
 
     // GameSelector::KeyChar (GameSelector.cpp:1051-1088)
@@ -1477,6 +1565,36 @@ public class GameSelector extends Widget implements ButtonListener {
     @Override
     public void buttonDepress(int theId) {
         if (mSlideCounter > 0) {
+            return;
+        }
+
+        // PORT-NOTE (deviation): the "unlock all content" button - the already-unlocked save gets
+        // the [ALREADY_UNLOCKED] note, a locked save gets the warning and the conditional unlock
+        // (LawnApp.unlockAllCheat with progress preservation) plus a selector refresh.
+        if (theId == GameSelector_UnlockAll) {
+            if (mApp.mPlayerInfo == null) {
+                return;
+            }
+            if (mApp.mPlayerInfo.mHasUsedCheatKeys != 0) {
+                mApp.lawnMessageBox(Dialogs.DIALOG_MESSAGE, "[ALREADY_UNLOCKED]",
+                        "[ALREADY_UNLOCKED_MESSAGE]", "[DIALOG_BUTTON_OK]", "", Dialog.BUTTONS_FOOTER);
+                return;
+            }
+            mApp.lawnMessageBox(Dialogs.DIALOG_MESSAGE, "[UNLOCK_ALL]", "[UNLOCK_ALL_WARNING]",
+                    "[DIALOG_BUTTON_YES]", "[DIALOG_BUTTON_NO]", Dialog.BUTTONS_YES_NO,
+                    theYes -> {
+                        if (theYes) {
+                            mApp.unlockAllCheat(mApp.mPlayerInfo, true);
+                            // the unlocked button settles into its pressed art with a micro-move:
+                            // no more press-state swapping, a nudge marks the click
+                            mUnlockAllButton.mButtonImage = mUnlockPress;
+                            mUnlockAllButton.mOverImage = mUnlockPress;
+                            mUnlockAllButton.mDownImage = mUnlockPress;
+                            mUnlockAllButton.mButtonOffsetX = 2;
+                            mUnlockAllButton.mButtonOffsetY = 2;
+                            syncProfile(false);
+                        }
+                    });
             return;
         }
 
