@@ -494,6 +494,12 @@ class HiddenCheatCodesTest {
         }
         assertTrue(app.earnedGoldTrophy(), "winning all non-endless challenges grants the gold sunflower");
         assertEquals(0, app.trophiesNeedForGoldSunflower());
+
+        // the yeti almanac entry (full art + description) unlocks: CanSpawnYetis is satisfied by
+        // mFinishedAdventure >= 2 (the yeti's starting level 40 would never be reached at F1-1)
+        assertTrue(app.canSpawnYetis(), "the yeti must be spawnable so its almanac entry shows");
+        assertTrue(app.almanacDialogZombieIsShown(ZombieType.ZOMBIE_YETI),
+                "the yeti almanac entry must be fully shown");
     }
 
     /** The badge image must exist in the retail pak: the Chinese GOTY ships different containers. */

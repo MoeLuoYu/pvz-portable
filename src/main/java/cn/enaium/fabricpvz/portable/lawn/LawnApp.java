@@ -541,11 +541,15 @@ public class LawnApp extends SexyApp {
         if (!thePreserveProgress) {
             aPlayer.mLevel = 1;
         }
-        aPlayer.mFinishedAdventure = 1;
+        // 2 = second playthrough and beyond: satisfies CanSpawnYetis (the yeti almanac entry and
+        // its description), which mFinishedAdventure = 1 alone would not
+        aPlayer.mFinishedAdventure = 2;
         aPlayer.mHasUnlockedMinigames = 1;
         aPlayer.mHasUnlockedPuzzleMode = 1;
         aPlayer.mHasUnlockedSurvivalMode = 1;
         aPlayer.mCoins = thePreserveProgress ? Math.max(aPlayer.mCoins, 999990) : 999990;
+        // the Yeti almanac entry (the zombie + its description) unlocks with the full version:
+        // canSpawnYetis() reads mFinishedAdventure/mLevel which the unlock already satisfies
 
         for (int aMode = GameMode.GAMEMODE_SURVIVAL_NORMAL_STAGE_1; aMode < GameMode.NUM_GAME_MODES; aMode++) {
             int aIndex = aMode - GameMode.GAMEMODE_SURVIVAL_NORMAL_STAGE_1;
@@ -3712,6 +3716,15 @@ public class LawnApp extends SexyApp {
         }
 
         return mTrialType == TrialType.TRIALTYPE_STAGELOCKED;
+    }
+
+    /**
+     * PORT-NOTE (deviation): whether the almanac shows a zombie's full entry (art + description),
+     * exposed for the unlockall test — delegates to the almanac dialog's own rules.
+     */
+    public boolean almanacDialogZombieIsShown(int theZombieType) {
+        return new cn.enaium.fabricpvz.portable.lawn.widget.AlmanacDialog(this)
+                .zombieIsShown(theZombieType);
     }
 
     /**
