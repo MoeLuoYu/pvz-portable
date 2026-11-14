@@ -71,6 +71,8 @@ public class ChallengeScreen extends Widget implements ButtonListener {
      * showcase entries (380 clears row 1 visibly: 212 + 115 = 327, a 53px gap).
      */
     public static final int CHALLENGE_BUTTON_LIMBO_X = 48;
+    public static final int CHALLENGE_BUTTON_LIMBO_SHOWCASE_X = 104;
+    public static final int CHALLENGE_BUTTON_LIMBO_SHOWCASE_COL_PITCH = 128;
     public static final int CHALLENGE_BUTTON_LIMBO_COL_PITCH = 120;
     public static final int CHALLENGE_BUTTON_LIMBO_SHOWCASE_Y = 380;
     /** Port addition: the squirrel tech demo shares upstream cell (2,3) with intro and stays off
@@ -147,15 +149,15 @@ public class ChallengeScreen extends Widget implements ButtonListener {
         new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_BIG_TIME, 3, ChallengePage.CHALLENGE_PAGE_LIMBO, 0, 3, "[BIG_TIME]"),
         new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_ART_CHALLENGE_SUNFLOWER, 4, ChallengePage.CHALLENGE_PAGE_LIMBO, 0, 4, "[ART_CHALLENGE_SUNFLOWER]"),
         new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_AIR_RAID, 5, ChallengePage.CHALLENGE_PAGE_LIMBO, 0, 5, "[AIR_RAID]"),
-        new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_ICE, 6, ChallengePage.CHALLENGE_PAGE_LIMBO, 1, 0, "[ICE_LEVEL]"),
-        new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_ZEN_GARDEN, 7, ChallengePage.CHALLENGE_PAGE_LIMBO, 2, 1, "[ZEN_GARDEN]"),
+        new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_ICE, 6, ChallengePage.CHALLENGE_PAGE_LIMBO, 2, 4, "[ICE_LEVEL]"),
+        new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_ZEN_GARDEN, 7, ChallengePage.CHALLENGE_PAGE_LIMBO, 2, 0, "[ZEN_GARDEN]"),
         new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_HIGH_GRAVITY, 8, ChallengePage.CHALLENGE_PAGE_LIMBO, 1, 1, "[HIGH_GRAVITY]"),
         new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_GRAVE_DANGER, 11, ChallengePage.CHALLENGE_PAGE_LIMBO, 1, 2, "[GRAVE_DANGER]"),
         new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_SHOVEL, 10, ChallengePage.CHALLENGE_PAGE_LIMBO, 1, 3, "[CAN_YOU_DIG_IT]"),
         new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_STORMY_NIGHT, 13, ChallengePage.CHALLENGE_PAGE_LIMBO, 1, 4, "[DARK_STORMY_NIGHT]"),
         new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_BUNGEE_BLITZ, 9, ChallengePage.CHALLENGE_PAGE_LIMBO, 1, 5, "[BUNGEE_BLITZ]"),
-        new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_SQUIRREL, 10, ChallengePage.CHALLENGE_PAGE_LIMBO, 2, 3, "Squirrel"),
-        new ChallengeDefinition(GameMode.GAMEMODE_TREE_OF_WISDOM, 10, ChallengePage.CHALLENGE_PAGE_LIMBO, 2, 2, "Tree of Wisdom"),
+        new ChallengeDefinition(GameMode.GAMEMODE_CHALLENGE_SQUIRREL, 10, ChallengePage.CHALLENGE_PAGE_LIMBO, 1, 0, "Squirrel"),
+        new ChallengeDefinition(GameMode.GAMEMODE_TREE_OF_WISDOM, 10, ChallengePage.CHALLENGE_PAGE_LIMBO, 2, 1, "Tree of Wisdom"),
         new ChallengeDefinition(GameMode.GAMEMODE_SCARY_POTTER_1, 10, ChallengePage.CHALLENGE_PAGE_PUZZLE, 0, 0, "[SCARY_POTTER_1]"),
         new ChallengeDefinition(GameMode.GAMEMODE_SCARY_POTTER_2, 10, ChallengePage.CHALLENGE_PAGE_PUZZLE, 0, 1, "[SCARY_POTTER_2]"),
         new ChallengeDefinition(GameMode.GAMEMODE_SCARY_POTTER_3, 10, ChallengePage.CHALLENGE_PAGE_PUZZLE, 0, 2, "[SCARY_POTTER_3]"),
@@ -176,8 +178,8 @@ public class ChallengeScreen extends Widget implements ButtonListener {
         new ChallengeDefinition(GameMode.GAMEMODE_PUZZLE_I_ZOMBIE_8, 11, ChallengePage.CHALLENGE_PAGE_PUZZLE, 3, 2, "[I_ZOMBIE_8]"),
         new ChallengeDefinition(GameMode.GAMEMODE_PUZZLE_I_ZOMBIE_9, 11, ChallengePage.CHALLENGE_PAGE_PUZZLE, 3, 3, "[I_ZOMBIE_9]"),
         new ChallengeDefinition(GameMode.GAMEMODE_PUZZLE_I_ZOMBIE_ENDLESS, 11, ChallengePage.CHALLENGE_PAGE_PUZZLE, 3, 4, "[I_ZOMBIE_ENDLESS]"),
-        new ChallengeDefinition(GameMode.GAMEMODE_UPSELL, 10, ChallengePage.CHALLENGE_PAGE_LIMBO, 2, 3, "Upsell"),
-        new ChallengeDefinition(GameMode.GAMEMODE_INTRO, 10, ChallengePage.CHALLENGE_PAGE_LIMBO, 2, 4, "Intro"),
+        new ChallengeDefinition(GameMode.GAMEMODE_UPSELL, 10, ChallengePage.CHALLENGE_PAGE_LIMBO, 2, 2, "Upsell"),
+        new ChallengeDefinition(GameMode.GAMEMODE_INTRO, 10, ChallengePage.CHALLENGE_PAGE_LIMBO, 2, 3, "Intro"),
     };
 
     // ChallengeScreen.h:50-58
@@ -293,13 +295,23 @@ public class ChallengeScreen extends Widget implements ButtonListener {
         return theGameMode == GameMode.GAMEMODE_CHALLENGE_ZEN_GARDEN
                 || theGameMode == GameMode.GAMEMODE_TREE_OF_WISDOM
                 || theGameMode == GameMode.GAMEMODE_UPSELL
-                || theGameMode == GameMode.GAMEMODE_INTRO;
+                || theGameMode == GameMode.GAMEMODE_INTRO
+                || theGameMode == GameMode.GAMEMODE_CHALLENGE_ICE;
     }
 
     // ChallengeScreen.cpp:160-170 (thumbnail grid position)
     // PORT-NOTE (deviation): the page parameter and the limbo branch are a port addition — the
     // limbo page uses its own 6-column grid (see the CHALLENGE_BUTTON_LIMBO_* constants).
     public static int challengeButtonX(int thePage, int theCol) {
+        return challengeButtonXYCol(thePage, 1, theCol);
+    }
+
+    /** The row-aware x mapping (a port addition; the showcase row centers five entries). */
+    public static int challengeButtonXYCol(int thePage, int theRow, int theCol) {
+        if (thePage == ChallengePage.CHALLENGE_PAGE_LIMBO && theRow == 2) {
+            // the showcase row centers its five entries on its own pitch
+            return CHALLENGE_BUTTON_LIMBO_SHOWCASE_X + theCol * CHALLENGE_BUTTON_LIMBO_SHOWCASE_COL_PITCH;
+        }
         if (thePage == ChallengePage.CHALLENGE_PAGE_LIMBO) {
             return CHALLENGE_BUTTON_LIMBO_X + theCol * CHALLENGE_BUTTON_LIMBO_COL_PITCH;
         }
@@ -381,7 +393,9 @@ public class ChallengeScreen extends Widget implements ButtonListener {
             ButtonWidget aChallengeButton = mChallengeButtons[aChallengeMode];
             aChallengeButton.mDoFinger = true;
             aChallengeButton.mFrameNoDraw = true;
-            aChallengeButton.resize(challengeButtonX(aChlDef.mPage, aChlDef.mCol), challengeButtonY(aChlDef.mPage, aChlDef.mRow),
+            // the row-aware x mapping: the showcase row centers its entries on the 128px pitch
+            aChallengeButton.resize(challengeButtonXYCol(aChlDef.mPage, aChlDef.mRow, aChlDef.mCol),
+                    challengeButtonY(aChlDef.mPage, aChlDef.mRow),
                     CHALLENGE_BUTTON_WIDTH, CHALLENGE_BUTTON_HEIGHT);
             if (!isEntryEnabled(aChallengeMode, moreTrophiesNeeded(aChallengeMode))) {
                 aChallengeButton.mDoFinger = false;
@@ -533,12 +547,9 @@ public class ChallengeScreen extends Widget implements ButtonListener {
     public void updateButtons() {
         for (int aChallengeMode = 0; aChallengeMode < NUM_CHALLENGE_MODES; aChallengeMode++) {
             ChallengeDefinition aDef = getChallengeDefinition(aChallengeMode);
-            // Port addition: the squirrel tech demo stays off the re-laid-out limbo page (upstream
-            // parked it in intro's cell at (2,3), where intro drew over it — it was never actually
-            // visible in retail; see the gChallengeDefs PORT-NOTE).
-            boolean aHidden = aDef.mPage == ChallengePage.CHALLENGE_PAGE_LIMBO
-                    && aDef.mChallengeMode == CHALLENGE_LIMBO_HIDDEN_MODE;
-            mChallengeButtons[aChallengeMode].mVisible = !aHidden && aDef.mPage == mPageIndex;
+            // PORT-NOTE (deviation): the squirrel demo is a visible playable entry now — it took
+            // ice's old cell (row 1, col 0) when ice moved onto the showcase row
+            mChallengeButtons[aChallengeMode].mVisible = aDef.mPage == mPageIndex;
         }
         // PORT-NOTE (deviation): with the -debug/-demo launch parameter the switcher shows
         // unconditionally; without it the original five-click easter egg

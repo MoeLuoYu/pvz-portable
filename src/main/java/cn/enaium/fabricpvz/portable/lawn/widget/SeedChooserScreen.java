@@ -203,7 +203,9 @@ public class SeedChooserScreen extends Widget {
         mMenuButton.mDrawStoneButton = true;
 
         mRandomButton = new GameButton(SEED_CHOOSER_SCREEN_RANDOM);
-        mRandomButton.setLabel("(Debug Play)");
+        // PORT-NOTE (deviation): upstream hardcoded "(Debug Play)"; this port resolves the
+        // [DEBUGPLAY] lawn-strings key (the demo-visible random-start button)
+        mRandomButton.setLabel("[DEBUGPLAY]");
         mRandomButton.mButtonImage = Resources.getImageById(ImageID.IMAGE_BLANK);
         mRandomButton.mOverImage = Resources.getImageById(ImageID.IMAGE_BLANK);
         mRandomButton.mDownImage = Resources.getImageById(ImageID.IMAGE_BLANK);
@@ -233,10 +235,8 @@ public class SeedChooserScreen extends Widget {
         mViewLawnButton.resize(22, 561, aImageWidth, aImageHeight);
         mViewLawnButton.mParentWidget = this;
         mViewLawnButton.mTextOffsetY = 1;
-        if (!mBoard.mCutScene.isSurvivalRepick()) {
-            mViewLawnButton.mBtnNoDraw = true;
-            mViewLawnButton.mDisabled = true;
-        }
+        // PORT-NOTE (deviation): upstream showed the view-lawn button only on survival repick
+        // stages (isSurvivalRepick); this port shows it whenever the seed chooser is up, any mode
 
         mAlmanacButton = new GameButton(SEED_CHOOSER_SCREEN_ALMANAC);
         mAlmanacButton.setLabel("[ALMANAC_BUTTON]");

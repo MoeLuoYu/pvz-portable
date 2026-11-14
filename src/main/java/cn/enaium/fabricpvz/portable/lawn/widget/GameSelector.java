@@ -369,14 +369,7 @@ public class GameSelector extends Widget implements ButtonListener {
                     mUnlockNormal, mUnlockHighlight, mUnlockPress);
             mUnlockAllButton.resize(0, 0, 110, 105);
             mUnlockAllButton.mDoFinger = true;
-            if (mApp.mPlayerInfo != null && mApp.mPlayerInfo.mHasUsedCheatKeys != 0) {
-                // an already-unlocked save shows the pressed art permanently
-                mUnlockAllButton.mButtonImage = mUnlockPress;
-                mUnlockAllButton.mOverImage = mUnlockPress;
-                mUnlockAllButton.mDownImage = mUnlockPress;
-                mUnlockAllButton.mButtonOffsetX = 2;
-                mUnlockAllButton.mButtonOffsetY = 2;
-            }
+            // the settled/normal look follows the current profile (syncProfile, see below)
             // the click area trims 8px left / ~10px top / 30px right (transparent edges and the
             // overhanging parts) and ends 24px above the image bottom, keeping the
             // pot-overhanging shadow unclickable
@@ -776,6 +769,18 @@ public class GameSelector extends Widget implements ButtonListener {
         mHasTrophy = mApp.hasFinishedAdventure() && !mApp.isTrialStageLocked();
         if (mHasTrophy && mSelectorState != SELECTOR_OPEN) {
             addTrophySparkle();
+        }
+
+        // PORT-NOTE (deviation): the unlock button's look follows the now-current profile — the
+        // pressed/settled art on an unlocked save, the normal art with press swapping otherwise
+        if (mUnlockAllButton != null) {
+            boolean aSettled = mApp.mPlayerInfo != null && mApp.mPlayerInfo.mHasUsedCheatKeys != 0;
+            Image aArt = aSettled ? mUnlockPress : mUnlockNormal;
+            mUnlockAllButton.mButtonImage = aArt;
+            mUnlockAllButton.mOverImage = aSettled ? aArt : mUnlockHighlight;
+            mUnlockAllButton.mDownImage = aSettled ? aArt : mUnlockPress;
+            mUnlockAllButton.mButtonOffsetX = aSettled ? 2 : 0;
+            mUnlockAllButton.mButtonOffsetY = aSettled ? 2 : 0;
         }
 
         syncButtons();

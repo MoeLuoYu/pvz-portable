@@ -255,32 +255,38 @@ class ChallengeTablesTest {
         assertEquals(4, aIZombieEndless.mCol);
         assertEquals("[I_ZOMBIE_ENDLESS]", aIZombieEndless.mChallengeName);
 
-        // The three rows whose names are not [BRACKETED] upstream literals (:88, :89, :110, :111).
+        // The rows whose names are not [BRACKETED] upstream literals (:88, :89, :110, :111).
         // PORT-NOTE (deviation): the showcase entries carry the limbo re-layout's coordinates
-        // (separated row 2, cols 1-4 — see ChallengeScreen.gChallengeDefs); the squirrel demo
-        // keeps upstream cell (2,3), hidden UI-side.
+        // (separated row 2 — see ChallengeScreen.gChallengeDefs); the squirrel demo takes ice's
+        // old playable cell (row 1, col 0) and is visible; ice moved onto the showcase row (2,5).
         ChallengeDefinition aSquirrel = challengeDefForMode(GameMode.GAMEMODE_CHALLENGE_SQUIRREL);
         assertEquals(ChallengePage.CHALLENGE_PAGE_LIMBO, aSquirrel.mPage);
-        assertEquals(2, aSquirrel.mRow);
-        assertEquals(3, aSquirrel.mCol);
+        assertEquals(1, aSquirrel.mRow);
+        assertEquals(0, aSquirrel.mCol);
         assertEquals("Squirrel", aSquirrel.mChallengeName);
+
+        ChallengeDefinition anIce = challengeDefForMode(GameMode.GAMEMODE_CHALLENGE_ICE);
+        assertEquals(ChallengePage.CHALLENGE_PAGE_LIMBO, anIce.mPage);
+        assertEquals(2, anIce.mRow);
+        assertEquals(4, anIce.mCol);
+        assertEquals("[ICE_LEVEL]", anIce.mChallengeName);
 
         ChallengeDefinition aTree = challengeDefForMode(GameMode.GAMEMODE_TREE_OF_WISDOM);
         assertEquals(ChallengePage.CHALLENGE_PAGE_LIMBO, aTree.mPage);
         assertEquals(2, aTree.mRow);
-        assertEquals(2, aTree.mCol);
+        assertEquals(1, aTree.mCol);
         assertEquals("Tree of Wisdom", aTree.mChallengeName);
 
         ChallengeDefinition anUpsell = challengeDefForMode(GameMode.GAMEMODE_UPSELL);
         assertEquals(ChallengePage.CHALLENGE_PAGE_LIMBO, anUpsell.mPage);
         assertEquals(2, anUpsell.mRow);
-        assertEquals(3, anUpsell.mCol);
+        assertEquals(2, anUpsell.mCol);
         assertEquals("Upsell", anUpsell.mChallengeName);
 
         ChallengeDefinition anIntro = challengeDefForMode(GameMode.GAMEMODE_INTRO);
         assertEquals(ChallengePage.CHALLENGE_PAGE_LIMBO, anIntro.mPage);
         assertEquals(2, anIntro.mRow);
-        assertEquals(4, anIntro.mCol);
+        assertEquals(3, anIntro.mCol);
         assertEquals("Intro", anIntro.mChallengeName);
     }
 

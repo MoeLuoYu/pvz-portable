@@ -2810,12 +2810,17 @@ public class SexyAppBase implements ButtonListener, DialogListener {
             // features (F1 level-jump dialog, the hidden cheat words, the limbo switcher); -trial
             // and -demo isolate the save data (savedata_trial / savedata_demo); -demo also wires
             // the preview profiles and implies every -debug feature.
-            case "-debug" -> mDebugLaunch = true;
+            case "-debug" -> {
+                // -debug carries the quickunlock button; -demo below implies everything -debug does
+                mDebugLaunch = true;
+                mQuickUnlockLaunch = true;
+            }
             case "-quickunlock" -> mQuickUnlockLaunch = true;
             case "-trial" -> mTrialLaunch = true;
             case "-demo" -> {
                 mDemoLaunch = true;
                 mDebugLaunch = true;
+                mQuickUnlockLaunch = true;
             }
             default -> {
                 popup(getString("INVALID_COMMANDLINE_PARAM", "Invalid command line parameter: ")

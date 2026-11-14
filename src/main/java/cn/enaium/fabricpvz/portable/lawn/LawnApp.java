@@ -641,7 +641,8 @@ public class LawnApp extends SexyApp {
             mCheatKeys = true;
             mDebugKeysEnabled = true;
         } else if ("-demo".equals(theParamName)) {
-            // the -demo launch parameter includes the -cheat debug keys
+            // the -demo launch parameter includes the -cheat debug keys; the quickunlock button
+            // rides the -debug flag that super sets
             mCheatKeys = true;
             mDebugKeysEnabled = true;
             super.handleCmdLineParam(theParamName, theParamValue);
@@ -3668,7 +3669,8 @@ public class LawnApp extends SexyApp {
         for (int i = 0; i < GameMode.NUM_GAME_MODES - 1; i++) {
             ChallengeDefinition aDef = ChallengeScreen.getChallengeDefinition(i);
             // Port addition: the limbo showcase entries (zen garden / tree of wisdom / upsell /
-            // intro) are not winnable challenges — never count them (ChallengeScreen.isShowcaseEntry).
+            // intro / ice level) are not winnable challenges — never count them
+            // (ChallengeScreen.isShowcaseEntry). The squirrel is a playable entry now and counts.
             if (aDef.mPage == thePage && !ChallengeScreen.isShowcaseEntry(aDef.mChallengeMode)
                     && hasBeatenChallenge(aDef.mChallengeMode)) {
                 aNumTrophies++;

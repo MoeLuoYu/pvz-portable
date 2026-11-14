@@ -108,7 +108,8 @@ class ChallengeScreenTest {
     /**
      * PORT-NOTE (deviation): the limbo page uses its own 6-column grid (port addition) — six
      * 104px thumbnails centered (x = 48, pitch 120, right edge 648 + 104 = 752), rows 0-1 for the
-     * 12 playable entries and a separated showcase row at y=380 for the four featured entries.
+     * 12 playable entries and a separated showcase row at y=380 for the five featured entries
+     * (zen garden / tree of wisdom / upsell / intro / ice level), centered on the 128px pitch.
      */
     @Test
     void limboPageLayoutGeometry() {
@@ -119,29 +120,35 @@ class ChallengeScreenTest {
         assertEquals(212, ChallengeScreen.challengeButtonY(ChallengePage.CHALLENGE_PAGE_LIMBO, 1));
         assertEquals(380, ChallengeScreen.challengeButtonY(ChallengePage.CHALLENGE_PAGE_LIMBO, 2),
                 "the showcase row, separated from row 1 (212 + 115 = 327)");
+        // the showcase row's own centered x mapping
+        assertEquals(104, ChallengeScreen.challengeButtonXYCol(ChallengePage.CHALLENGE_PAGE_LIMBO, 2, 0));
+        assertEquals(616, ChallengeScreen.challengeButtonXYCol(ChallengePage.CHALLENGE_PAGE_LIMBO, 2, 4));
     }
 
     /**
-     * PORT-NOTE (deviation): the re-laid-out limbo page shows 16 of its 17 entries — 12 playable
-     * in rows 0-1 (6 per row), the four showcase entries (zen garden / tree of wisdom / upsell /
-     * intro) centered on the separated row; the squirrel tech demo stays off the page (upstream
-     * parked it in intro's cell, never visible in retail).
+     * PORT-NOTE (deviation): the re-laid-out limbo page shows all 17 of its entries — 12 playable
+     * in rows 0-1 (6 per row), five showcase entries (zen garden / tree of wisdom / upsell /
+     * intro / ice level) centered on the separated row; the squirrel tech demo takes ice's old
+     * playable cell (row 1, col 0) and is visible now.
      */
     @Test
-    void limboPageShowsTwelvePlayableAndFourShowcaseEntries() {
+    void limboPageShowsTwelvePlayableAndFiveShowcaseEntries() {
         ChallengeScreen aScreen = newScreen(ChallengePage.CHALLENGE_PAGE_LIMBO);
 
         int aPlayable = 0;
         int aShowcase = 0;
+        StringBuilder aFound = new StringBuilder();
         for (int i = 0; i < ChallengeScreen.NUM_CHALLENGE_MODES; i++) {
             ChallengeDefinition aDef = ChallengeScreen.getChallengeDefinition(i);
             if (aDef.mPage != ChallengePage.CHALLENGE_PAGE_LIMBO || !aScreen.mChallengeButtons[i].mVisible) {
                 continue;
             }
+            aFound.append(aDef.mChallengeName).append("(r").append(aDef.mRow).append(",c").append(aDef.mCol).append(") ");
             if (aDef.mRow == 2) {
                 aShowcase++;
                 assertEquals(380, aScreen.mChallengeButtons[i].mY, aDef.mChallengeName + " on the showcase row");
-                assertTrue(aDef.mCol >= 1 && aDef.mCol <= 4, aDef.mChallengeName + " centered (cols 1-4)");
+                assertEquals(104 + aDef.mCol * 128, aScreen.mChallengeButtons[i].mX,
+                        aDef.mChallengeName + " centered on the showcase pitch");
             } else {
                 aPlayable++;
                 assertEquals(93 + aDef.mRow * 119, aScreen.mChallengeButtons[i].mY,
@@ -149,10 +156,10 @@ class ChallengeScreenTest {
                 assertTrue(aDef.mCol >= 0 && aDef.mCol <= 5, aDef.mChallengeName + " in the 6-column grid");
             }
         }
-        assertEquals(12, aPlayable, "twelve playable entries in two 6-column rows");
-        assertEquals(4, aShowcase, "four showcase entries on the separated row");
-        assertFalse(aScreen.mChallengeButtons[GameMode.GAMEMODE_CHALLENGE_SQUIRREL - 1].mVisible,
-                "the squirrel tech demo stays off the page");
+        assertEquals(12, aPlayable, "twelve playable entries in two 6-column rows; found: " + aFound);
+        assertEquals(5, aShowcase, "five showcase entries on the separated row");
+        assertTrue(aScreen.mChallengeButtons[GameMode.GAMEMODE_CHALLENGE_SQUIRREL - 1].mVisible,
+                "the squirrel demo is now visible in ice's old playable cell");
     }
 
     /**
@@ -253,7 +260,7 @@ class ChallengeScreenTest {
                         "limbo entry " + aDef.mChallengeName + " stays unlocked");
             }
         }
-        assertEquals(16, aVisible, "the re-laid-out limbo page shows 16 of its 17 entries");
+        assertEquals(17, aVisible, "the re-laid-out limbo page shows all 17 of its entries");
     }
 
     /** The four surfaced endless variants follow the pool endless entry's lock rule exactly. */
@@ -308,14 +315,14 @@ class ChallengeScreenTest {
      * getNumTrophies; here the predicate itself.
      */
     @Test
-    void showcaseEntriesAreExactlyTheFourUtilityModes() {
+    void showcaseEntriesAreExactlyTheFiveUtilityModes() {
         int[] aShowcase = {GameMode.GAMEMODE_CHALLENGE_ZEN_GARDEN, GameMode.GAMEMODE_TREE_OF_WISDOM,
-                GameMode.GAMEMODE_UPSELL, GameMode.GAMEMODE_INTRO};
+                GameMode.GAMEMODE_UPSELL, GameMode.GAMEMODE_INTRO, GameMode.GAMEMODE_CHALLENGE_ICE};
         for (int aMode : aShowcase) {
             assertTrue(ChallengeScreen.isShowcaseEntry(aMode), "mode " + aMode + " is showcase");
         }
 
-        int[] aPlayable = {GameMode.GAMEMODE_CHALLENGE_SUNNY_DAY, GameMode.GAMEMODE_CHALLENGE_ICE,
+        int[] aPlayable = {GameMode.GAMEMODE_CHALLENGE_SUNNY_DAY,
                 GameMode.GAMEMODE_CHALLENGE_SQUIRREL, GameMode.GAMEMODE_SURVIVAL_ENDLESS_STAGE_3,
                 GameMode.GAMEMODE_CHALLENGE_FINAL_BOSS};
         for (int aMode : aPlayable) {
