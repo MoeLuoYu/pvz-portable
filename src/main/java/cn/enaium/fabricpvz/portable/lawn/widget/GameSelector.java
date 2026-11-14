@@ -148,6 +148,8 @@ public class GameSelector extends Widget implements ButtonListener {
     public ToolTipWidget mToolTip;
     public boolean mHasTrophy;
     public boolean mUnlockSelectorCheat;
+    /** PORT-NOTE (deviation): the trial nag shows once per selector session (see the open path). */
+    private boolean mTrialNagShown;
     public int mSlideCounter; // +0x154
     public int mStartX; // +0x158
     public int mStartY; // +0x15C
@@ -1057,6 +1059,29 @@ public class GameSelector extends Widget implements ButtonListener {
                     mSelectorState = SELECTOR_IDLE;
                 }
 
+                // PORT-NOTE (deviation): the -demo launch parameter wires the preview profiles
+                // (GameSelector::AddPreviewProfiles, GameSelector.cpp:1260-1360) that upstream only
+                // injected in partner builds; addProfile returns null for existing names, so this
+                // is idempotent across selector re-opens.
+                if (mApp.mDemoLaunch) {
+                    addPreviewProfiles();
+                }
+
+                // PORT-NOTE (deviation): the trial nag — the upstream demo showed its
+                // register/purchase dialog periodically; this port shows it once per session when
+                // the selector opens with the trial still locked. Yes unlocks for real.
+                if (mApp.isTrialStageLocked() && !mTrialNagShown) {
+                    mTrialNagShown = true;
+                    mApp.lawnMessageBox(Dialogs.DIALOG_MESSAGE, "[GET_FULL_VERSION_TITLE]",
+                            "[GET_FULL_VERSION_BODY]", "[GET_FULL_VERSION_YES_BUTTON]",
+                            "[GET_FULL_VERSION_NO_BUTTON]", Dialog.BUTTONS_YES_NO,
+                            theYes -> {
+                                if (theYes) {
+                                    mApp.unlockFullVersion();
+                                }
+                            });
+                }
+
                 if (mHasTrophy) {
                     addTrophySparkle();
                 }
@@ -1249,11 +1274,27 @@ public class GameSelector extends Widget implements ButtonListener {
             return;
         }
 
-        // PORT-NOTE (deviation): the "unlockall" hidden cheat word typed on the main menu pushes the
-        // current save to the fully-unlocked state (LawnApp.unlockAllCheat). The selector caches its
-        // display state in SyncProfile, so re-sync right away — the unlocked buttons, the start
-        // button and the trophy would otherwise only show up after leaving the menu.
-        if (mApp.mUnlockAllCheck != null && mApp.mUnlockAllCheck.check(theKey)
+        // PORT-NOTE (deviation): the tmpunlock hidden cheat word toggles the selector's
+        // availability cheat (mUnlockSelectorCheat - the flag neither upstream nor this port ever
+        // sets), so the almanac / store / zen-garden buttons light up regardless of progress; and
+        // the "unlockall" hidden cheat word pushes the current save to the fully-unlocked state
+        // (LawnApp.unlockAllCheat). Both are debug-launch features (-debug/-demo). The selector
+        // caches its display state in SyncProfile, so re-sync right away — the unlocked buttons,
+        // the start button and the trophy would otherwise only show up after leaving the menu.
+        if (mApp.mDebugLaunch && mApp.mTmpUnlockCheck != null && mApp.mTmpUnlockCheck.check(theKey)) {
+            mUnlockSelectorCheat = !mUnlockSelectorCheat;
+            syncProfile(false);
+            if (mUnlockSelectorCheat) {
+                // syncProfile recomputes the mode locks from the profile - clear them after it,
+                // like the upstream 'c' selector debug key (GameSelector.cpp:1088-1095)
+                mMinigamesLocked = false;
+                mPuzzleLocked = false;
+                mSurvivalLocked = false;
+            }
+            syncButtons();
+            return;
+        }
+        if (mApp.mDebugLaunch && mApp.mUnlockAllCheck != null && mApp.mUnlockAllCheck.check(theKey)
                 && mApp.mPlayerInfo != null) {
             mApp.unlockAllCheat();
             syncProfile(false);
@@ -1584,44 +1625,9 @@ public class GameSelector extends Widget implements ButtonListener {
 
         aProfile = mApp.mProfileMgr.addProfile("Full Unlock");
         if (aProfile != null) {
-            aProfile.mLevel = 1;
-            aProfile.mFinishedAdventure = 2;
-            aProfile.addCoins(50000);
-            aProfile.mPurchases[StoreItem.STORE_ITEM_FERTILIZER] = PlayerInfo.PURCHASE_COUNT_OFFSET + 5;
-            aProfile.mPurchases[StoreItem.STORE_ITEM_BUG_SPRAY] = PlayerInfo.PURCHASE_COUNT_OFFSET + 5;
-            aProfile.mPurchases[StoreItem.STORE_ITEM_CHOCOLATE] = PlayerInfo.PURCHASE_COUNT_OFFSET + 5;
-            aProfile.mPurchases[StoreItem.STORE_ITEM_TREE_FOOD] = PlayerInfo.PURCHASE_COUNT_OFFSET + 5;
-            aProfile.mHasUnlockedMinigames = 1;
-            aProfile.mHasUnlockedPuzzleMode = 1;
-            aProfile.mPurchases[StoreItem.STORE_ITEM_PLANT_GATLINGPEA] = 1;
-            aProfile.mPurchases[StoreItem.STORE_ITEM_PLANT_TWINSUNFLOWER] = 1;
-            aProfile.mPurchases[StoreItem.STORE_ITEM_PLANT_GLOOMSHROOM] = 1;
-            aProfile.mPurchases[StoreItem.STORE_ITEM_PLANT_CATTAIL] = 1;
-            aProfile.mPurchases[StoreItem.STORE_ITEM_PLANT_WINTERMELON] = 1;
-            aProfile.mPurchases[StoreItem.STORE_ITEM_PLANT_GOLD_MAGNET] = 1;
-            aProfile.mPurchases[StoreItem.STORE_ITEM_PLANT_SPIKEROCK] = 1;
-            aProfile.mPurchases[StoreItem.STORE_ITEM_PLANT_COBCANNON] = 1;
-            aProfile.mPurchases[StoreItem.STORE_ITEM_PLANT_IMITATER] = 1;
-            aProfile.mPurchases[StoreItem.STORE_ITEM_PACKET_UPGRADE] = 3;
-            aProfile.mPurchases[StoreItem.STORE_ITEM_POOL_CLEANER] = 1;
-            aProfile.mPurchases[StoreItem.STORE_ITEM_ROOF_CLEANER] = 1;
-            aProfile.mPurchases[StoreItem.STORE_ITEM_PHONOGRAPH] = 1;
-            aProfile.mPurchases[StoreItem.STORE_ITEM_GARDENING_GLOVE] = 1;
-            aProfile.mPurchases[StoreItem.STORE_ITEM_MUSHROOM_GARDEN] = 1;
-            aProfile.mPurchases[StoreItem.STORE_ITEM_WHEEL_BARROW] = 1;
-            aProfile.mPurchases[StoreItem.STORE_ITEM_AQUARIUM_GARDEN] = 1;
-            aProfile.mPurchases[StoreItem.STORE_ITEM_TREE_OF_WISDOM] = 1;
-
-            aProfile.mChallengeRecords[GameMode.GAMEMODE_TREE_OF_WISDOM - 1] = 1;
-            for (int i = 1; i <= 100; i++) {
-                if (i != GameMode.GAMEMODE_TREE_OF_WISDOM && i != GameMode.GAMEMODE_SCARY_POTTER_ENDLESS
-                        && i != GameMode.GAMEMODE_PUZZLE_I_ZOMBIE_ENDLESS
-                        && i != GameMode.GAMEMODE_SURVIVAL_ENDLESS_STAGE_3) {
-                    aProfile.mChallengeRecords[i - 1] = 20;
-                }
-            }
-
-            aProfile.saveDetails();
+            // PORT-NOTE (deviation): the demo's full-unlock profile carries exactly the unlockall
+            // hidden cheat's state (LawnApp.unlockAllCheat) - one unified unlock state for both
+            mApp.unlockAllCheat(aProfile);
         }
     }
 

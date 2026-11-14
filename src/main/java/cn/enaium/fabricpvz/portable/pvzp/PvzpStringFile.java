@@ -47,7 +47,7 @@ public final class PvzpStringFile {
         int aNameStart = theFileText.indexOf('[', thePtr[0]);
         if (aNameStart == -1) {
             if (!isAllWhiteSpace(theFileText, thePtr[0])) { // the remaining text is not all whitespace
-                Common.logInfoLn("Failed to find string name");
+                Common.logDebugLn("Failed to find string name");
                 return false;
             }
 
@@ -56,14 +56,14 @@ public final class PvzpStringFile {
         } else {
             int aNameEnd = theFileText.indexOf(']', aNameStart + 1);
             if (aNameEnd == -1) {
-                Common.logInfoLn("Failed to find ']'");
+                Common.logDebugLn("Failed to find ']'");
                 return false;
             }
 
             int aCount = aNameEnd - aNameStart - 1;
             theName[0] = Common.trim(theFileText.substring(aNameStart + 1, aNameStart + 1 + aCount));
             if (theName[0].length() == 0) {
-                Common.logInfoLn("Name Too Short");
+                Common.logDebugLn("Name Too Short");
                 return false;
             }
 
@@ -143,7 +143,7 @@ public final class PvzpStringFile {
         SexyAppBase aApp = SexyAppBase.current;
         String aFileContent = aApp == null ? null : aApp.readUtf8StringFromFile(theFileName);
         if (aFileContent == null) {
-            Common.logInfoLn("Failed to open '{}'", theFileName);
+            Common.logDebugLn("Failed to open '{}'", theFileName);
             return false;
         }
 

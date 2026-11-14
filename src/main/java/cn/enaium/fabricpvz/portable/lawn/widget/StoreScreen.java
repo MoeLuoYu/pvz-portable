@@ -1271,14 +1271,27 @@ public class StoreScreen extends Dialog {
             if (new Rect(aItemPos2[0], aItemPos2[1], 50, 87).contains(x, y)) {
                 if (isFullVersionOnly(aItemType)) {
                     mWaitForDialog = true;
+                    // PORT-NOTE (deviation): the demo pointed these at the purchase page; this port
+                    // unlocks the trial for real (no backend)
                     mApp.lawnMessageBox(Dialogs.DIALOG_MESSAGE, "[GET_FULL_VERSION_TITLE]",
-                            "[FULL_VERSION_TO_BUY]", "[DIALOG_BUTTON_OK]", "", BUTTONS_FOOTER);
+                            "[FULL_VERSION_TO_BUY]", "[GET_FULL_VERSION_YES_BUTTON]",
+                            "[GET_FULL_VERSION_NO_BUTTON]", Dialog.BUTTONS_YES_NO, theYes -> {
+                                if (theYes) {
+                                    mApp.unlockFullVersion();
+                                }
+                            });
                     mWaitForDialog = false;
                 } else if (aItemType == StoreItem.STORE_ITEM_PVZ) {
                     mWaitForDialog = true;
+                    // PORT-NOTE (deviation): the demo's Buy-PvZ item unlocks the trial for real
+                    // (no backend) instead of pointing at the store page
                     mApp.lawnMessageBox(Dialogs.DIALOG_MESSAGE, "[BUY_PVZ_TITLE]", "[BUY_PVZ_BODY]",
                             "[GET_FULL_VERSION_YES_BUTTON]", "[GET_FULL_VERSION_NO_BUTTON]",
-                            BUTTONS_YES_NO);
+                            BUTTONS_YES_NO, theYes -> {
+                                if (theYes) {
+                                    mApp.unlockFullVersion();
+                                }
+                            });
                     mWaitForDialog = false;
                 } else if (!isItemSoldOut(aItemType) && !isItemUnavailable(aItemType)
                         && !isComingSoon(aItemType)) {

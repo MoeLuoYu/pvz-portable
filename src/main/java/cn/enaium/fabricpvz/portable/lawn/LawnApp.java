@@ -188,10 +188,10 @@ public class LawnApp extends SexyApp {
     public TypingCheck mDanceCheck;
     public TypingCheck mDaisyCheck;
     public TypingCheck mSukhbirCheck;
-    // PORT-NOTE (deviation): sixteen hidden cheat words new to this port
+    // PORT-NOTE (deviation): seventeen hidden cheat words new to this port
     // (cheatplant/lazyclick/wingame/killzom/killplant/killall/cherryboom/fast/love/froze/
-    // retrack/dotrack/fillhoe/final/nextlevel/unlockall), typed with the same TypingCheck machinery
-    // as the upstream words above.
+    // retrack/dotrack/fillhoe/final/nextlevel/unlockall/tmpunlock), typed with the same
+    // TypingCheck machinery as the upstream words above.
     public TypingCheck mCheatPlantCheck;
     public TypingCheck mLazyClickCheck;
     public TypingCheck mWinGameCheck;
@@ -207,6 +207,7 @@ public class LawnApp extends SexyApp {
     public TypingCheck mFillHoeCheck;
     public TypingCheck mFinalCheck;
     public TypingCheck mNextLevelCheck;
+    public TypingCheck mTmpUnlockCheck;
     public TypingCheck mUnlockAllCheck;
     public boolean mMustacheMode;
     public boolean mSuperMowerMode;
@@ -216,6 +217,12 @@ public class LawnApp extends SexyApp {
     public boolean mDaisyMode;
     public boolean mSukhbirMode;
     public int mTrialType;
+    /**
+     * PORT-NOTE (deviation): the -trial save's unlock flag ([TRIAL_UNLOCKED] click with no backend)
+     * — persisted in the isolated trial save's registry (savedata_trial/registry.regemu), so the
+     * next launch with this save starts as the full version.
+     */
+    public boolean mTrialUnlocked;
     public boolean mDebugTrialLocked;
     public boolean mMuteSoundsForCutscene;
 
@@ -495,6 +502,7 @@ public class LawnApp extends SexyApp {
         mFillHoeCheck = new TypingCheck("fillhoe");
         mFinalCheck = new TypingCheck("final");
         mNextLevelCheck = new TypingCheck("nextlevel");
+        mTmpUnlockCheck = new TypingCheck("tmpunlock");
         mUnlockAllCheck = new TypingCheck("unlockall");
     }
 
@@ -507,7 +515,15 @@ public class LawnApp extends SexyApp {
      * Endless modes stay unwon: there is no beating them.
      */
     public void unlockAllCheat() {
-        PlayerInfo aPlayer = mPlayerInfo;
+        unlockAllCheat(mPlayerInfo);
+    }
+
+    /**
+     * PORT-NOTE (deviation): the core of the unlockall hidden cheat, shared with the -demo mode's
+     * "Full Unlock" preview profile — one unified unlock state for both entry points.
+     */
+    public void unlockAllCheat(PlayerInfo thePlayer) {
+        PlayerInfo aPlayer = thePlayer;
         if (aPlayer == null) {
             return;
         }
@@ -582,7 +598,11 @@ public class LawnApp extends SexyApp {
     // LawnApp::InitHook (LawnApp.cpp:3117)
     @Override
     public void initHook() {
-        mTrialType = TrialType.TRIALTYPE_NONE;
+        // PORT-NOTE (deviation): upstream reset the trial type here; this port keeps the -trial
+        // launch parameter's stage lock unless the trial save carries the unlock flag (read from
+        // the isolated trial registry during init).
+        mTrialType = mTrialLaunch && !mTrialUnlocked
+                ? TrialType.TRIALTYPE_STAGELOCKED : TrialType.TRIALTYPE_NONE;
     }
 
     // LawnApp::DebugKeyDown (LawnApp.cpp:1274)
@@ -597,6 +617,16 @@ public class LawnApp extends SexyApp {
         if ("-cheat".equals(theParamName)) {
             mCheatKeys = true;
             mDebugKeysEnabled = true;
+        } else if ("-demo".equals(theParamName)) {
+            // the -demo launch parameter includes the -cheat debug keys
+            mCheatKeys = true;
+            mDebugKeysEnabled = true;
+            super.handleCmdLineParam(theParamName, theParamValue);
+        } else if ("-trial".equals(theParamName)) {
+            // the -trial branch: the stage-locked trial state plus the isolated save folder
+            // (mTrialLaunch, handled by super for the savedata resolution)
+            mTrialType = TrialType.TRIALTYPE_STAGELOCKED;
+            super.handleCmdLineParam(theParamName, theParamValue);
         } else {
             super.handleCmdLineParam(theParamName, theParamValue);
         }
@@ -867,6 +897,7 @@ public class LawnApp extends SexyApp {
         registryWriteBoolean("AutoPause", mAutoPause);
         // The F3 debug overlay's persisted default (the key toggles it at runtime either way).
         registryWriteBoolean("DebugInfo", mShowFPS);
+        registryWriteBoolean("TrialUnlocked", mTrialUnlocked);
 
         super.writeToRegistry();
     }
@@ -885,6 +916,9 @@ public class LawnApp extends SexyApp {
 
         if (registryReadBoolean("DebugInfo", aBool)) {
             mShowFPS = aBool[0];
+        }
+        if (registryReadBoolean("TrialUnlocked", aBool)) {
+            mTrialUnlocked = aBool[0];
         }
     }
 
@@ -1661,6 +1695,9 @@ public class LawnApp extends SexyApp {
      */
     @Override
     public void f1Pressed() {
+        if (!mDebugLaunch) {
+            return; // the level-jump dialog is a debug-launch feature
+        }
         if (mBoard == null || mGameScene != GameScenes.SCENE_PLAYING) {
             return;
         }
@@ -3117,7 +3154,7 @@ public class LawnApp extends SexyApp {
         ReanimatorTrackInstance aHandTrackInstance = aCrazyDaveReanim.getTrackInstanceByName("Dave_handinghand");
         Attachment.attachmentDie(aHandTrackInstance.mAttachmentID);
 
-        Common.logInfoLn("DoneHanding");
+        Common.logDebugLn("DoneHanding");
     }
 
     // LawnApp::CrazyDaveStopSound (LawnApp.cpp:2531)
@@ -3204,7 +3241,7 @@ public class LawnApp extends SexyApp {
 
                 Reanimation aWallnutReanim = addReanimation(0.0f, 0.0f, 0, ReanimationType.REANIM_WALLNUT);
                 aWallnutReanim.playReanim("anim_idle", ReanimLoopType.REANIM_LOOP, 0, 12.0f);
-                Common.logInfoLn("Handed");
+                Common.logDebugLn("Handed");
 
                 ReanimatorTrackInstance aHandTrackInstance = aCrazyDaveReanim.getTrackInstanceByName("Dave_handinghand");
                 AttachEffect aAttachEffect = Attachment.attachReanim(aHandTrackInstance.mAttachmentID, aWallnutReanim, 100.0f, 393.0f);
@@ -3506,7 +3543,7 @@ public class LawnApp extends SexyApp {
     public void preloadForUser() {
         int aNumTasks = mCompletedLoadingThreadTasks.get() + getNumPreloadingTasks();
         if (mTitleScreen != null && mTitleScreen.mQuickLoadKey != KeyCode.KEYCODE_UNKNOWN) {
-            Common.logInfoLn("preload canceled");
+            Common.logDebugLn("preload canceled");
             mNumLoadingThreadTasks.set(aNumTasks);
             return;
         }
@@ -3540,7 +3577,7 @@ public class LawnApp extends SexyApp {
                     }
 
                     if (mTitleScreen != null && mTitleScreen.mQuickLoadKey != KeyCode.KEYCODE_UNKNOWN) {
-                        Common.logInfoLn("preload canceled");
+                        Common.logDebugLn("preload canceled");
                         mNumLoadingThreadTasks.set(aNumTasks);
                         return;
                     }
@@ -3571,7 +3608,7 @@ public class LawnApp extends SexyApp {
                 }
 
                 if (mTitleScreen != null && mTitleScreen.mQuickLoadKey != KeyCode.KEYCODE_UNKNOWN) {
-                    Common.logInfoLn("preload canceled");
+                    Common.logDebugLn("preload canceled");
                     mNumLoadingThreadTasks.set(aNumTasks);
                     return;
                 }
@@ -3583,7 +3620,7 @@ public class LawnApp extends SexyApp {
         }
 
         if (mCompletedLoadingThreadTasks.get() != aNumTasks) {
-            Common.logInfoLn("num preload tasks wasn't calculated correctly");
+            Common.logDebugLn("num preload tasks wasn't calculated correctly");
             mCompletedLoadingThreadTasks.set(aNumTasks);
         }
     }
@@ -3643,7 +3680,32 @@ public class LawnApp extends SexyApp {
             return true;
         }
 
+        // PORT-NOTE (deviation): the unlock flag from the trial save ([TRIAL_UNLOCKED]) lifts the
+        // trial locks for good
+        if (mTrialUnlocked) {
+            return false;
+        }
+
         return mTrialType == TrialType.TRIALTYPE_STAGELOCKED;
+    }
+
+    /**
+     * PORT-NOTE (deviation): the trial's "unlock full version" click with no backend — the unlock
+     * flag persists in the isolated trial save's registry (savedata_trial/registry.regemu, written
+     * immediately), so the next launch with this save starts as the full version. The seed
+     * chooser / almanac / level-cap trial locks lift for the rest of the session.
+     */
+    public void unlockFullVersion() {
+        if (mTrialUnlocked) {
+            return;
+        }
+        mTrialUnlocked = true;
+        mTrialType = TrialType.TRIALTYPE_NONE;
+        registryWriteBoolean("TrialUnlocked", true);
+        // PORT-NOTE (deviation): the confirmation is a LawnDialog ([TRIAL_UNLOCKED_TITLE] /
+        // [TRIAL_UNLOCKED]); DIALOG_INFO keeps it clear of the answering DIALOG_MESSAGE
+        lawnMessageBox(Dialogs.DIALOG_INFO, "[TRIAL_UNLOCKED_TITLE]", "[TRIAL_UNLOCKED]",
+                "[DIALOG_BUTTON_OK]", "", Dialog.BUTTONS_FOOTER);
     }
 
     // LawnApp::GetMoneyString (LawnApp.cpp:3122)

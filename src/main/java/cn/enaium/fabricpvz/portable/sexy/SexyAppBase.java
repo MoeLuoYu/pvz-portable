@@ -160,6 +160,14 @@ public class SexyAppBase implements ButtonListener, DialogListener {
     public String mResourceDir = "";
     public String mCustomSaveDir = "";
 
+    /**
+     * PORT-NOTE (deviation): the hidden launch parameters (see handleCmdLineParam). {@code -demo}
+     * implies every {@code -debug} feature.
+     */
+    public boolean mTrialLaunch;
+    public boolean mDemoLaunch;
+    public boolean mDebugLaunch;
+
     public int mRelaxUpdateBacklogCount;
     public int mPreferredX;
     public int mPreferredY;
@@ -2796,6 +2804,16 @@ public class SexyAppBase implements ButtonListener, DialogListener {
             case "-screensaver" -> mIsScreenSaver = true;
             case "-resdir" -> mResourceDir = theParamValue;
             case "-savedir" -> mCustomSaveDir = theParamValue;
+            // PORT-NOTE (deviation): the hidden launch parameters. -debug turns on the debug-only
+            // features (F1 level-jump dialog, the hidden cheat words, the limbo switcher); -trial
+            // and -demo isolate the save data (savedata_trial / savedata_demo); -demo also wires
+            // the preview profiles and implies every -debug feature.
+            case "-debug" -> mDebugLaunch = true;
+            case "-trial" -> mTrialLaunch = true;
+            case "-demo" -> {
+                mDemoLaunch = true;
+                mDebugLaunch = true;
+            }
             default -> {
                 popup(getString("INVALID_COMMANDLINE_PARAM", "Invalid command line parameter: ")
                         + theParamName);
@@ -2879,6 +2897,7 @@ public class SexyAppBase implements ButtonListener, DialogListener {
     // SexyAppBase::Shutdown (SexyAppBase.cpp:1571)
     public void shutdown() {
         AppHooksRegistry.dispatcher().onGameExiting();
+        releaseInstanceLock();
 
         if (!isOnPrimaryThread()) {
             mLoadingFailed.set(true);
@@ -2966,14 +2985,15 @@ public class SexyAppBase implements ButtonListener, DialogListener {
 
     // SexyAppBase::LogPerfStats (SexyAppBase.cpp:2932)
     public void logPerfStats() {
-        Common.logInfoLn("Seconds       = {}", (ticks() - mStartTick) / 1000.0);
-        Common.logInfoLn("Sleep Count   = {}", mSleepCount);
-        Common.logInfoLn("Update Count  = {}", mUpdateCount);
-        Common.logInfoLn("Draw Count    = {}", mDrawCount);
-        Common.logInfoLn("Draw Time     = {}", mDrawTime);
-        Common.logInfoLn("Screen Blt    = {}", mScreenBltTime);
+        // the exit-time perf summary is diagnostics: DEBUG level, invisible in a normal run
+        Common.logDebugLn("Seconds       = {}", (ticks() - mStartTick) / 1000.0);
+        Common.logDebugLn("Sleep Count   = {}", mSleepCount);
+        Common.logDebugLn("Update Count  = {}", mUpdateCount);
+        Common.logDebugLn("Draw Count    = {}", mDrawCount);
+        Common.logDebugLn("Draw Time     = {}", mDrawTime);
+        Common.logDebugLn("Screen Blt    = {}", mScreenBltTime);
         if (mDrawTime + mScreenBltTime > 0) {
-            Common.logInfoLn("Avg FPS       = {}",
+            Common.logDebugLn("Avg FPS       = {}",
                     (mDrawCount * 1000L) / (mDrawTime + mScreenBltTime));
         }
     }
@@ -3052,7 +3072,20 @@ public class SexyAppBase implements ButtonListener, DialogListener {
         if (!mCustomSaveDir.isEmpty()) {
             Common.setAppDataFolder(mCustomSaveDir);
         } else if (Common.getAppDataFolder().isEmpty()) {
-            Common.setAppDataFolder(Common.getResourcePath("savedata"));
+            // PORT-NOTE (deviation): -trial/-demo isolate their saves from the regular profile
+            String aSaveDir = mTrialLaunch ? "savedata_trial"
+                    : mDemoLaunch ? "savedata_demo" : "savedata";
+            Common.setAppDataFolder(Common.getResourcePath(aSaveDir));
+        }
+
+        // PORT-NOTE (deviation): the single-instance check is revived - upstream's
+        // HandleGameAlreadyRunning was dead code in this SDL rewrite (nothing ever invoked it), so
+        // the mOnlyAllowOneCopyToRun flag never did anything. A lock file in the save folder holds
+        // the "one copy" claim for the process lifetime; a second launch fails to lock it and exits
+        // through HandleGameAlreadyRunning before creating a window. -cheat disables the flag and
+        // therefore the lock; -trial/-demo isolate their own lock files per save folder.
+        if (mOnlyAllowOneCopyToRun && !acquireInstanceLock()) {
+            handleGameAlreadyRunning();
         }
 
         readFromRegistry();
@@ -3135,6 +3168,50 @@ public class SexyAppBase implements ButtonListener, DialogListener {
      * complete flower in the title bar, the zombie hand in the taskbar). Silent when a resource is
      * absent.
      */
+    /** The instance-lock channel/file, held for the process lifetime (see acquireInstanceLock). */
+    private java.nio.channels.FileChannel mInstanceLockChannel;
+    private java.nio.channels.FileLock mInstanceLock;
+
+    /**
+     * Claims the single-instance lock - an {@code instance.lock} file in the save folder held via a
+     * FileLock for the whole process. False when another live copy already holds it; IO failures
+     * fail open (the game starts) with a warning.
+     */
+    private boolean acquireInstanceLock() {
+        try {
+            java.nio.file.Path aLockFile = java.nio.file.Path.of(Common.getAppDataFolder())
+                    .resolve("instance.lock");
+            Files.createDirectories(aLockFile.getParent());
+            mInstanceLockChannel = java.nio.channels.FileChannel.open(aLockFile,
+                    java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.WRITE);
+            mInstanceLock = mInstanceLockChannel.tryLock();
+            if (mInstanceLock == null) {
+                mInstanceLockChannel.close();
+                mInstanceLockChannel = null;
+                return false;
+            }
+            return true;
+        } catch (IOException theException) {
+            Common.logWarnLn("instance lock failed (continuing): {}", theException.toString());
+            return true; // fail open: a broken lock must not block the launch
+        }
+    }
+
+    private void releaseInstanceLock() {
+        try {
+            if (mInstanceLock != null) {
+                mInstanceLock.release();
+                mInstanceLock = null;
+            }
+            if (mInstanceLockChannel != null) {
+                mInstanceLockChannel.close();
+                mInstanceLockChannel = null;
+            }
+        } catch (IOException theException) {
+            Common.logWarnLn("instance lock release failed: {}", theException.toString());
+        }
+    }
+
     /**
      * PORT-NOTE (deviation): the two-shot taskbar-icon re-apply (see maybeReapplyWindowIcon) —
      * anchored to the first main-loop iteration, i.e. the moment the window becomes responsive

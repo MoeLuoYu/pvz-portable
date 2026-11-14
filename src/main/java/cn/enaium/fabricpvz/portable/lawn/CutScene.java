@@ -1456,9 +1456,17 @@ public class CutScene {
         String aCrazyDaveText = mApp.getCrazyDaveText(mCrazyDaveLastTalkIndex);
         int anIndex = aCrazyDaveText.indexOf("{DELAY_");
         if (anIndex != -1) {
-            String aDelayTimeStr = aCrazyDaveText.substring(anIndex + 7, aCrazyDaveText.indexOf("}"));
-            mCrazyDaveCountDown = Integer.parseInt(aDelayTimeStr.trim());
-            return mCrazyDaveCountDown;
+            // PORT-NOTE (deviation): upstream sscanf'd past the marker; a translated message with a
+            // missing or misplaced closing brace crashed the substring here - a malformed or absent
+            // tag falls back to the default 100 instead
+            int aClose = aCrazyDaveText.indexOf('}', anIndex + 7);
+            if (aClose != -1) {
+                try {
+                    mCrazyDaveCountDown = Integer.parseInt(aCrazyDaveText.substring(anIndex + 7, aClose).trim());
+                    return mCrazyDaveCountDown;
+                } catch (NumberFormatException ignored) {
+                }
+            }
         }
         return 100;
     }
@@ -1468,9 +1476,15 @@ public class CutScene {
         String aCrazyDaveText = mApp.getCrazyDaveText(mCrazyDaveLastTalkIndex);
         int anIndex = aCrazyDaveText.indexOf("{TIME_");
         if (anIndex != -1) {
-            String aTalkTimeStr = aCrazyDaveText.substring(anIndex + 6, aCrazyDaveText.indexOf("}"));
-            mCrazyDaveCountDown = Integer.parseInt(aTalkTimeStr.trim());
-            return mCrazyDaveCountDown;
+            // PORT-NOTE (deviation): same defensive parse as parseDelayTimeFromMessage
+            int aClose = aCrazyDaveText.indexOf('}', anIndex + 6);
+            if (aClose != -1) {
+                try {
+                    mCrazyDaveCountDown = Integer.parseInt(aCrazyDaveText.substring(anIndex + 6, aClose).trim());
+                    return mCrazyDaveCountDown;
+                } catch (NumberFormatException ignored) {
+                }
+            }
         }
         return 100;
     }

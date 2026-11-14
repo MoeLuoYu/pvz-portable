@@ -465,19 +465,31 @@ public class ChallengeScreen extends Widget implements ButtonListener {
                     && aDef.mChallengeMode == CHALLENGE_LIMBO_HIDDEN_MODE;
             mChallengeButtons[aChallengeMode].mVisible = !aHidden && aDef.mPage == mPageIndex;
         }
+        // PORT-NOTE (deviation): with the -debug/-demo launch parameter the switcher shows
+        // unconditionally; without it the original five-click easter egg
+        // (ChallengeScreen.cpp:751-771 sets mLimboPageUnlocked, kept in mouseDown) gates the limbo
+        // button again.
+        boolean aLimboUnlocked = mApp.mDebugLaunch || mLimboPageUnlocked;
         for (int aPage = 0; aPage < ChallengePage.MAX_CHALLANGE_PAGES; aPage++) {
             ButtonWidget aPageButton = mPageButton[aPage];
 
-            // PORT-NOTE (deviation): upstream revealed the limbo button only after the five-click
-            // easter egg (ChallengeScreen.cpp:751-771 sets mLimboPageUnlocked); the switcher shows
-            // on the mini-game and limbo pages unconditionally now, so the easter egg no longer
-            // gates anything (kept as upstream trace in mouseDown). Only the highlighted (clickable)
-            // switcher target wears the button frame: the current page's own button falls back to
-            // the frameless text look.
-            Image aFrame = Resources.getImageById(Resources.IMAGE_SEEDCHOOSER_BUTTON2_ID);
-            Image aGlow = Resources.getImageById(Resources.IMAGE_SEEDCHOOSER_BUTTON2_GLOW_ID);
+            // PORT-NOTE (deviation): the locked (non-debug) state keeps the whole switcher
+            // invisible - the original easter-egg look, no "current page" highlight either
+            if (!aLimboUnlocked) {
+                aPageButton.mVisible = false;
+                continue;
+            }
+
+            // both switcher entries show on the switcher pages once unlocked
+            // (or with -debug/-demo); survival/puzzle keep their constructed-invisible state
+            if (aPage == ChallengePage.CHALLENGE_PAGE_LIMBO
+                    || aPage == ChallengePage.CHALLENGE_PAGE_CHALLENGE) {
+                aPageButton.mVisible = showPageButtons();
+            }
+
+            // the highlight follows the current page: yellow on the shared frame, not clickable;
+            // the other switcher entry is the click target in dark blue
             if (aPage == mPageIndex) {
-                // the current page carries the highlight color and is not clickable
                 aPageButton.setLabelColor(new Color(255, 240, 0));
                 aPageButton.mDisabled = true;
             } else {
@@ -678,8 +690,9 @@ public class ChallengeScreen extends Widget implements ButtonListener {
 
         // PORT-NOTE (deviation): the switcher's shared frame — one button image scaled around both
         // labels (child widgets draw after this, so the labels land on top). Only on the switcher
-        // pages; the highlight itself is the labels' font colors (see updateButtons).
-        if (showPageButtons()) {
+        // pages, and only while the limbo button is visible (the easter-egg-locked state shows the
+        // original frameless look); the highlight itself is the labels' font colors.
+        if (showPageButtons() && (mApp.mDebugLaunch || mLimboPageUnlocked)) {
             Image aFrame = Resources.getImageById(Resources.IMAGE_SEEDCHOOSER_BUTTON2_ID);
             g.drawImage(aFrame,
                     new Rect(CHALLENGE_PAGE_FRAME_X, CHALLENGE_PAGE_FRAME_Y,

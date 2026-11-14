@@ -1733,6 +1733,11 @@ final class BoardInput {
     // mustache/trickedout/future/pinata/dance/daisies/sukhbir; these are matched with the same
     // TypingCheck machinery but only act while a level is being played.
     private static void doHiddenCheatCheck(Board b, int theKey) {
+        // PORT-NOTE (deviation): the hidden cheat words this port added are debug-launch features
+        // (-debug/-demo); the upstream typing checks above stay ungated, like the retail game
+        if (!b.mApp.mDebugLaunch) {
+            return;
+        }
         if (b.mApp.mGameScene != GameScenes.SCENE_PLAYING) {
             return;
         }

@@ -64,6 +64,7 @@ class HiddenCheatCodesTest {
         LawnApp app = new LoadedReanimApp();
         LawnApp.gLawnApp = app;
         app.mGameMode = GameMode.GAMEMODE_ADVENTURE;
+        app.mDebugLaunch = true; // the hidden cheat words are debug-launch features
         app.mPlayerInfo = app.mProfileMgr.addProfile("HiddenCheatCodesTest");
         app.mPlayerInfo.mLevel = 1;
         app.mPlayerInfo.mFinishedAdventure = 0;
@@ -315,6 +316,7 @@ class HiddenCheatCodesTest {
         try {
             app.initTypingChecks();
             app.mGameScene = GameScenes.SCENE_PLAYING;
+            app.mDebugLaunch = true; // the hidden cheat words are debug-launch features
             Zombie aZombie1 = board.addZombieInRow(ZombieType.ZOMBIE_NORMAL, 2, 0);
             Zombie aZombie2 = board.addZombieInRow(ZombieType.ZOMBIE_NORMAL, 3, 0);
             assertFalse(aZombie1.isDeadOrDying());
@@ -355,6 +357,7 @@ class HiddenCheatCodesTest {
         try {
             app.initTypingChecks();
             app.mGameScene = GameScenes.SCENE_PLAYING;
+            app.mDebugLaunch = true; // the hidden cheat words are debug-launch features
             Zombie aZombie = board.addZombieInRow(ZombieType.ZOMBIE_NORMAL, 2, 0);
             Plant aPlant = board.addPlant(0, 0, SeedType.SEED_PEASHOOTER, SeedType.SEED_NONE);
 
@@ -574,6 +577,55 @@ class HiddenCheatCodesTest {
     }
 
     @Test
+    void trialUnlockLiftsTheTrialLocks() {
+        Board board = newPlayingBoard();
+        LoadedReanimApp app = (LoadedReanimApp) board.mApp;
+        app.mTrialLaunch = true;
+        app.mTrialType = TrialType.TRIALTYPE_STAGELOCKED;
+        assertTrue(app.isTrialStageLocked());
+
+        app.unlockFullVersion();
+
+        assertFalse(app.isTrialStageLocked(), "the unlock lifts the trial locks");
+        assertTrue(app.mTrialUnlocked);
+        assertEquals(TrialType.TRIALTYPE_NONE, app.mTrialType);
+        assertNotNull(app.getDialog(Dialogs.DIALOG_INFO),
+                "the unlock confirmation dialog ([TRIAL_UNLOCKED_TITLE]/[TRIAL_UNLOCKED]) shows");
+    }
+
+    @Test
+    void daveMessageTagParsingIsDefensive() {
+        Board board = newPlayingBoard();
+        LoadedReanimApp app = (LoadedReanimApp) board.mApp;
+        CutScene aCutScene = board.mCutScene;
+        app.mStringProperties.put("CRAZY_DAVE_3301", "到头儿啦，伙计！{DELAY_500}");
+        app.mStringProperties.put("CRAZY_DAVE_3302", "到头儿啦{SCREAM}，伙计！{DELAY_200"); // 破损翻译
+        app.mStringProperties.put("CRAZY_DAVE_3303", "到头儿啦，伙计！"); // 无标记
+        app.mStringProperties.put("CRAZY_DAVE_3304", "{TIME_800}");
+        // the real UPSSELL line 3300 structure: the {TIME_} tag's closing brace comes BEFORE the
+        // {DELAY_} marker — the crashed message
+        app.mStringProperties.put("CRAZY_DAVE_3305", "{TIME_275}到头儿啦，伙计！{DELAY_50}");
+
+        aCutScene.mCrazyDaveLastTalkIndex = 3301;
+        assertEquals(500, aCutScene.parseDelayTimeFromMessage());
+
+        aCutScene.mCrazyDaveLastTalkIndex = 3305;
+        assertEquals(50, aCutScene.parseDelayTimeFromMessage(),
+                "the {DELAY_} value must win over the earlier {TIME_} brace");
+
+        // the crashed case: a closing brace BEFORE the marker and a truncated {DELAY_ tag —
+        // falls back to the default 100 instead of throwing StringIndexOutOfBounds
+        aCutScene.mCrazyDaveLastTalkIndex = 3302;
+        assertEquals(100, aCutScene.parseDelayTimeFromMessage());
+
+        aCutScene.mCrazyDaveLastTalkIndex = 3303;
+        assertEquals(100, aCutScene.parseDelayTimeFromMessage());
+
+        aCutScene.mCrazyDaveLastTalkIndex = 3304;
+        assertEquals(800, aCutScene.parseTalkTimeFromMessage());
+    }
+
+    @Test
     void screenshotSaveShowsTheCaption() throws Exception {
         Board board = newPlayingBoard();
         LoadedReanimApp app = (LoadedReanimApp) board.mApp;
@@ -629,6 +681,17 @@ class HiddenCheatCodesTest {
     // -------------------------------------------------------------------------------------
     // gating
     // -------------------------------------------------------------------------------------
+
+    @Test
+    void hiddenCheatsRequireTheDebugLaunch() {
+        Board board = newPlayingBoard();
+        board.mApp.mDebugLaunch = false; // launched without -debug/-demo
+        Zombie aZombie = board.addZombie(ZombieType.ZOMBIE_NORMAL, Zombie.ZOMBIE_WAVE_DEBUG);
+
+        typeWord(board, "killall");
+        assertFalse(aZombie.isDeadOrDying(), "the hidden cheat words need -debug/-demo");
+        assertFalse(board.mApp.mEasyPlantingCheat);
+    }
 
     @Test
     void hiddenCheatsDoNothingOutsidePlayingScene() {

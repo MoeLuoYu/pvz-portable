@@ -105,14 +105,14 @@ public final class RegEmu {
         try {
             aData = Files.readAllBytes(Paths.get(currFile));
         } catch (IOException | RuntimeException e) {
-            Common.logInfoLn("RegEmu: Can't read '{}': File does not exist", currFile);
+            Common.logDebugLn("RegEmu: Can.t read '{}': File does not exist", currFile);
             return;
         }
 
         if (aData.length < 6
                 || aData[0] != 'R' || aData[1] != 'E' || aData[2] != 'G'
                 || aData[3] != 'E' || aData[4] != 'M' || aData[5] != 'U') {
-            Common.logInfoLn("RegEmu: Can't read '{}': Invalid header", currFile);
+            Common.logDebugLn("RegEmu: Can.t read '{}': Invalid header", currFile);
             return;
         }
 
@@ -203,12 +203,12 @@ public final class RegEmu {
     public static boolean registryRead(String keyName, String valueName, RegValue theOutValue) {
         TreeMap<String, RegValue> aValueMap = registry.get(keyName);
         if (aValueMap == null) {
-            Common.logInfoLn("RegEmu: Key '{}' does not exist", keyName);
+            Common.logDebugLn("RegEmu: Key .{}. does not exist", keyName);
             return false;
         }
         RegValue aValue = aValueMap.get(valueName);
         if (aValue == null) {
-            Common.logInfoLn("RegEmu: Value '{}' does not exist", valueName);
+            Common.logDebugLn("RegEmu: Value .{}. does not exist", valueName);
             return false;
         }
 
@@ -249,7 +249,7 @@ public final class RegEmu {
         }
 
         registry.remove(keyName);
-        Common.logInfoLn("RegEmu: Erased key '{}'", keyName);
+        Common.logDebugLn("RegEmu: Erased key '{}'", keyName);
 
         saveToFile();
 
@@ -264,7 +264,7 @@ public final class RegEmu {
         }
 
         aValueMap.remove(valueName);
-        Common.logInfoLn("RegEmu: Erased value '{}' from key '{}'", valueName, keyName);
+        Common.logDebugLn("RegEmu: Erased value '{}' from key '{}'", valueName, keyName);
 
         saveToFile();
 

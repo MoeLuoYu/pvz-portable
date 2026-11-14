@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 import cn.enaium.fabricpvz.portable.lawn.ChallengePage;
 import cn.enaium.fabricpvz.portable.lawn.GameMode;
+import cn.enaium.fabricpvz.portable.sexy.Color;
 import cn.enaium.fabricpvz.portable.lawn.LawnApp;
 import cn.enaium.fabricpvz.portable.sexy.ButtonWidget;
 
@@ -162,19 +163,22 @@ class ChallengeScreenTest {
      */
     @Test
     void theSwitcherShowsOnlyOnMinigameAndLimboPages() {
-        ChallengeScreen aSurvival = newScreen(ChallengePage.CHALLENGE_PAGE_SURVIVAL);
+        LawnApp anApp = new LawnApp();
+        cn.enaium.fabricpvz.portable.test.HeadlessTestApp.initialize(anApp);
+        anApp.mDebugLaunch = true; // the debug look: the limbo button shows without the easter egg
+        ChallengeScreen aSurvival = new ChallengeScreen(anApp, ChallengePage.CHALLENGE_PAGE_SURVIVAL);
         assertEquals(0, countVisiblePageButtons(aSurvival), "no switcher on the survival page");
         assertFalse(aSurvival.showPageButtons());
 
-        ChallengeScreen aPuzzle = newScreen(ChallengePage.CHALLENGE_PAGE_PUZZLE);
+        ChallengeScreen aPuzzle = new ChallengeScreen(anApp, ChallengePage.CHALLENGE_PAGE_PUZZLE);
         assertEquals(0, countVisiblePageButtons(aPuzzle), "no switcher on the puzzle page");
         assertFalse(aPuzzle.showPageButtons());
 
-        ChallengeScreen aMinigame = newScreen(ChallengePage.CHALLENGE_PAGE_CHALLENGE);
+        ChallengeScreen aMinigame = new ChallengeScreen(anApp, ChallengePage.CHALLENGE_PAGE_CHALLENGE);
         assertEquals(2, countVisiblePageButtons(aMinigame), "page 1 + the limbo button");
         assertTrue(aMinigame.showPageButtons(), "no cheat keys required");
 
-        ChallengeScreen aLimbo = newScreen(ChallengePage.CHALLENGE_PAGE_LIMBO);
+        ChallengeScreen aLimbo = new ChallengeScreen(anApp, ChallengePage.CHALLENGE_PAGE_LIMBO);
         assertEquals(2, countVisiblePageButtons(aLimbo), "the way back from the limbo page");
         assertTrue(aLimbo.showPageButtons());
     }
@@ -193,6 +197,41 @@ class ChallengeScreenTest {
                 "the limbo button reads as page two");
         assertFalse(aScreen.mPageButton[ChallengePage.CHALLENGE_PAGE_SURVIVAL].mVisible);
         assertFalse(aScreen.mPageButton[ChallengePage.CHALLENGE_PAGE_PUZZLE].mVisible);
+    }
+
+    /** The yellow highlight follows the current page: on limbo it moves to the 第 2 页 label. */
+    @Test
+    void theSwitcherHighlightFollowsTheCurrentPage() {
+        LawnApp anApp = new LawnApp();
+        cn.enaium.fabricpvz.portable.test.HeadlessTestApp.initialize(anApp);
+        anApp.mDebugLaunch = true;
+        ChallengeScreen aScreen = new ChallengeScreen(anApp, ChallengePage.CHALLENGE_PAGE_CHALLENGE);
+
+        // on the mini-games page the current page (第 1 页) is highlighted, the target dim
+        assertEquals(new Color(255, 240, 0), aScreen.mPageButton[1].mColors.mLabel);
+        assertEquals(new Color(42, 42, 90), aScreen.mPageButton[2].mColors.mLabel);
+
+        aScreen.buttonDepress(ChallengeScreen.ChallengeScreen_Page + ChallengePage.CHALLENGE_PAGE_LIMBO);
+
+        // on the limbo page the highlight moves to 第 2 页
+        assertEquals(new Color(42, 42, 90), aScreen.mPageButton[1].mColors.mLabel);
+        assertEquals(new Color(255, 240, 0), aScreen.mPageButton[2].mColors.mLabel);
+    }
+
+    /** Without the debug launch the limbo button follows the original five-click easter egg. */
+    @Test
+    void theLimboButtonFollowsTheOriginalEasterEggWithoutTheDebugLaunch() {
+        LawnApp anApp = new LawnApp();
+        cn.enaium.fabricpvz.portable.test.HeadlessTestApp.initialize(anApp);
+        assertFalse(anApp.mDebugLaunch);
+        ChallengeScreen aScreen = new ChallengeScreen(anApp, ChallengePage.CHALLENGE_PAGE_CHALLENGE);
+        assertFalse(aScreen.mPageButton[ChallengePage.CHALLENGE_PAGE_LIMBO].mVisible, "locked at first");
+
+        for (int i = 0; i < 5; i++) {
+            aScreen.mouseDown(10, 10, 1);
+        }
+        assertTrue(aScreen.mLimboPageUnlocked, "the five clicks unlock the limbo page");
+        assertTrue(aScreen.mPageButton[ChallengePage.CHALLENGE_PAGE_LIMBO].mVisible, "unlocked");
     }
 
     /** The limbo page is reachable from the switcher and its entries are all unlocked. */

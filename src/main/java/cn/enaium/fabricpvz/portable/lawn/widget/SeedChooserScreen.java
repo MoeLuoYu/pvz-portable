@@ -1462,7 +1462,9 @@ public class SeedChooserScreen extends Widget {
                             "[GET_FULL_VERSION_NO_BUTTON]", Dialog.BUTTONS_YES_NO,
                             theYes -> {
                                 if (theYes) {
-                                    mApp.doBackToMain();
+                                    // PORT-NOTE (deviation): upstream demo opened the purchase URL;
+                                    // this port unlocks the trial for real (no backend)
+                                    mApp.unlockFullVersion();
                                 }
                             });
                 } else {
@@ -1498,8 +1500,6 @@ public class SeedChooserScreen extends Widget {
 
     // SeedChooserScreen.cpp:1088-1106
     public void closeSeedChooser() {
-        Common.logInfoLn("Dave seed pick: closeSeedChooser entered, bank packets = {}",
-                mBoard.mSeedBank.mNumPackets);
         for (int anIndex = 0; anIndex < mBoard.mSeedBank.mNumPackets; anIndex++) {
             int aSeedType = findSeedInBank(anIndex);
             ChosenSeed aChosenSeed = mChosenSeeds[aSeedType];
