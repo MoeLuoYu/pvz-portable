@@ -1720,13 +1720,16 @@ public class LawnApp extends SexyApp {
      * everyone — upstream only exposed it through the debug 'l' key with -cheat (Board.cpp KeyChar
      * 'l' → DoCheatDialog). The level behind it needs no explicit pause: the cheat dialog is modal,
      * and {@link #modalOpen}/{@link #modalClose} already pause and resume the board around it.
+     * The dialog also opens during the level-intro prep phase (SCENE_LEVEL_INTRO), where the
+     * restart it performs is exactly the same preNewGame.
      */
     @Override
     public void f1Pressed() {
         if (!mDebugLaunch) {
             return; // the level-jump dialog is a debug-launch feature
         }
-        if (mBoard == null || mGameScene != GameScenes.SCENE_PLAYING) {
+        if (mBoard == null || (mGameScene != GameScenes.SCENE_PLAYING
+                && mGameScene != GameScenes.SCENE_LEVEL_INTRO)) {
             return;
         }
         if (getDialogCount() > 0) {

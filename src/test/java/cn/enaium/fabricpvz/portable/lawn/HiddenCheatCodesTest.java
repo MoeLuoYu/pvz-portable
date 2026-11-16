@@ -547,9 +547,9 @@ class HiddenCheatCodesTest {
     @Test
     void f1IsIgnoredWithoutABoardOrUnderAnotherDialog() {
         Board board = newPlayingBoard();
-        board.mApp.mGameScene = GameScenes.SCENE_LEVEL_INTRO;
+        board.mApp.mGameScene = GameScenes.SCENE_MENU;
         board.mApp.f1Pressed();
-        assertNull(board.mApp.getDialog(Dialogs.DIALOG_CHEAT), "no jump dialog outside SCENE_PLAYING");
+        assertNull(board.mApp.getDialog(Dialogs.DIALOG_CHEAT), "no jump dialog outside a level scene");
 
         Board aPlayingBoard = newPlayingBoard();
         aPlayingBoard.mApp.f1Pressed();
@@ -557,6 +557,22 @@ class HiddenCheatCodesTest {
         // a second press under the open dialog must not re-open or re-pause
         aPlayingBoard.mApp.f1Pressed();
         assertNotNull(aPlayingBoard.mApp.getDialog(Dialogs.DIALOG_CHEAT));
+    }
+
+    @Test
+    void f1OpensTheJumpDialogDuringTheLevelIntro() {
+        Board board = newPlayingBoard();
+        board.mApp.mGameScene = GameScenes.SCENE_LEVEL_INTRO;
+        assertFalse(board.mPaused);
+
+        board.mApp.f1Pressed();
+        assertNotNull(board.mApp.getDialog(Dialogs.DIALOG_CHEAT), "the intro prep phase allows the jump dialog");
+        assertTrue(board.mPaused, "the intro pauses while the jump dialog is up");
+
+        // cancel closes the dialog and hands the intro back
+        board.mApp.finishCheatDialog(false);
+        assertNull(board.mApp.getDialog(Dialogs.DIALOG_CHEAT));
+        assertFalse(board.mPaused);
     }
 
     @Test
@@ -702,7 +718,7 @@ class HiddenCheatCodesTest {
     @Test
     void hiddenCheatsDoNothingOutsidePlayingScene() {
         Board board = newPlayingBoard();
-        board.mApp.mGameScene = GameScenes.SCENE_LEVEL_INTRO;
+        board.mApp.mGameScene = GameScenes.SCENE_MENU;
         Zombie aZombie = board.addZombie(ZombieType.ZOMBIE_NORMAL, Zombie.ZOMBIE_WAVE_DEBUG);
         Plant aPlant = board.addPlant(0, 0, SeedType.SEED_PEASHOOTER, SeedType.SEED_NONE);
         int aWaveBefore = board.mCurrentWave;
@@ -716,5 +732,31 @@ class HiddenCheatCodesTest {
         assertFalse(board.mLevelAwardSpawned);
         assertEquals(aWaveBefore, board.mCurrentWave); // untouched by "final"
         assertNotEquals(BoardResult.BOARDRESULT_WON, board.mApp.mBoardResult);
+    }
+
+    @Test
+    void wingameAndNextlevelWorkDuringTheLevelIntro() {
+        // the intro prep phase admits exactly these two words (plus the F1 jump dialog)
+        Board board = newPlayingBoard();
+        board.mApp.mGameScene = GameScenes.SCENE_LEVEL_INTRO;
+        typeWord(board, "wingame");
+        assertEquals(BoardResult.BOARDRESULT_WON, board.mApp.mBoardResult);
+        assertTrue(board.mLevelAwardSpawned);
+
+        Board aNextBoard = newPlayingBoard();
+        aNextBoard.mApp.mGameScene = GameScenes.SCENE_LEVEL_INTRO;
+        typeWord(aNextBoard, "nextlevel");
+        assertEquals(BoardResult.BOARDRESULT_WON, aNextBoard.mApp.mBoardResult);
+
+        // every other hidden word stays silent during the intro
+        Board aIntroBoard = newPlayingBoard();
+        aIntroBoard.mApp.mGameScene = GameScenes.SCENE_LEVEL_INTRO;
+        Zombie aZombie = aIntroBoard.addZombie(ZombieType.ZOMBIE_NORMAL, Zombie.ZOMBIE_WAVE_DEBUG);
+        typeWord(aIntroBoard, "killall");
+        assertFalse(aZombie.isDeadOrDying());
+        typeWord(aIntroBoard, "cheatplant");
+        assertFalse(aIntroBoard.mApp.mEasyPlantingCheat);
+        typeWord(aIntroBoard, "final");
+        assertNotEquals(aIntroBoard.mNumWaves - 1, aIntroBoard.mCurrentWave, "final must not jump the wave during the intro");
     }
 }

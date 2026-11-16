@@ -1212,7 +1212,7 @@ public class GameSelector extends Widget implements ButtonListener {
         trackButton(mStoreButton, "SelectorScreen_BG_Right", 334.0f, 441.0f);
         if (mUnlockAllButton != null) {
             // the same tombstone binding as help/quit, raised a button-height above them
-            trackButton(mUnlockAllButton, "SelectorScreen_BG_Right", 644.0f - 74.0f + 88.0f - 44.0f + 11.0f, 372.0f - 74.0f - 11.0f);
+            trackButton(mUnlockAllButton, "SelectorScreen_BG_Right", 644.0f - 74.0f + 88.0f - 44.0f + 10.0f, 372.0f - 74.0f - 11.0f);
         }
         trackButton(mChangeUserButton, "woodsign2", 24.0f, 10.0f);
         trackButton(mZombatarButton, "woodsign3", 0.f, 0.f);

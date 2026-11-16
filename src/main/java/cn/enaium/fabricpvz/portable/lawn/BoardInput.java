@@ -1731,17 +1731,33 @@ final class BoardInput {
     // (cheatplant/lazyclick/wingame/killzom/killplant/killall/cherryboom/fast/love/froze/
     // retrack/dotrack/fillhoe/final/nextlevel). Upstream Board::DoTypingCheck only knows
     // mustache/trickedout/future/pinata/dance/daisies/sukhbir; these are matched with the same
-    // TypingCheck machinery but only act while a level is being played.
+    // TypingCheck machinery but only act while a level is being played — except wingame/nextlevel,
+    // which also act during the level-intro prep phase (SCENE_LEVEL_INTRO).
     private static void doHiddenCheatCheck(Board b, int theKey) {
         // PORT-NOTE (deviation): the hidden cheat words this port added are debug-launch features
         // (-debug/-demo); the upstream typing checks above stay ungated, like the retail game
         if (!b.mApp.mDebugLaunch) {
             return;
         }
-        if (b.mApp.mGameScene != GameScenes.SCENE_PLAYING) {
+        boolean aLevelIntro = b.mApp.mGameScene == GameScenes.SCENE_LEVEL_INTRO;
+        if (b.mApp.mGameScene != GameScenes.SCENE_PLAYING && !aLevelIntro) {
             return;
         }
 
+        // wingame/nextlevel are matched first: they are the only words that also act during the
+        // intro prep phase, everything below waits for the aLevelIntro guard
+        if (b.mApp.mWinGameCheck.check(theKey)) {
+            winGameCheat(b);
+            return;
+        }
+        if (b.mApp.mNextLevelCheck.check(theKey)) {
+            b.mApp.mBoardResult = BoardResult.BOARDRESULT_WON;
+            b.fadeOutLevel();
+            return;
+        }
+        if (aLevelIntro) {
+            return; // during the intro prep only wingame/nextlevel act; the rest need the level proper
+        }
         if (b.mApp.mCheatPlantCheck.check(theKey)) {
             b.mApp.mEasyPlantingCheat = !b.mApp.mEasyPlantingCheat;
             b.displayAdvice(b.mApp.mEasyPlantingCheat ? "[ADVICE_EASY_PLANTING_CHEAT_ON]"
@@ -1760,15 +1776,6 @@ final class BoardInput {
                     }
                 }
             }
-            return;
-        }
-        if (b.mApp.mWinGameCheck.check(theKey)) {
-            winGameCheat(b);
-            return;
-        }
-        if (b.mApp.mNextLevelCheck.check(theKey)) {
-            b.mApp.mBoardResult = BoardResult.BOARDRESULT_WON;
-            b.fadeOutLevel();
             return;
         }
         if (b.mApp.mReTrackCheck.check(theKey)) {
