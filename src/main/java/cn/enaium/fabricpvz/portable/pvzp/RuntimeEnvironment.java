@@ -35,10 +35,10 @@ public final class RuntimeEnvironment {
     }
 
     /**
-     * The mod count the selector's caption shows: the game itself counts as one, plus every
-     * top-level mod the loader loaded on top (the loader is not counted - it is the thing doing the
-     * loading, and the caption's second line already names it). Nothing published (a run without
-     * the loader) reads as the bare one.
+     * The mod count the selector's caption and the F3 overlay show: the game itself counts as one,
+     * plus every top-level mod the loader loaded, the loader itself included (it is one of the
+     * containers the loader manages). Nothing published (a run without the loader) reads as the
+     * bare one.
      */
     public static int totalMods() {
         String aRaw = System.getProperty(LOADED_MODS_PROPERTY);
