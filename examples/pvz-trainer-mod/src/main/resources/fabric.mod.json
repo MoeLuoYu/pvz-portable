@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "pvz-trainer-mod",
+  "version": "1.0.0",
+  "name": "PvZ Trainer Mod",
+  "description": "修改器模组：小键盘 0-4 热键切换无限阳光/免费种植/自动收集/秒冷却/秒杀全场。",
+  "authors": [
+    "MoeLuoYu"
+  ],
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "main": [
+      "cn.enaium.fabricpvz.trainermod.TrainerMod"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.0",
+    "fabric-api": ">=1.1.0",
+    "pvz-portable": "*"
+  }
+}
