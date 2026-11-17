@@ -142,18 +142,33 @@ class NewOptionsDialogTest {
     }
 
     @Test
-    void resizeAppliesFromSelectorOffsets() {
+    void selectorVariantKeepsTheCompactInLevelLayout() {
+        // PORT deviation: upstream spread the selector-variant control rows 5-20px apart
+        // (NewOptionsDialog.cpp:159-165), which left room for only two bottom buttons; this port
+        // keeps both variants on the same compact in-level layout
         LawnApp app = newApp();
         NewOptionsDialog aDialog = newDialog(app, true);
 
-        assertEquals(116 + NewOptionsDialog.FROM_SELECTOR_MUSIC_OFFSET_Y, aDialog.mMusicVolumeSlider.mY);
-        assertEquals(143 + NewOptionsDialog.FROM_SELECTOR_SFX_OFFSET_Y, aDialog.mSfxVolumeSlider.mY);
-        assertEquals(175 + NewOptionsDialog.FROM_SELECTOR_HW_ACCEL_OFFSET_Y,
-                aDialog.mHardwareAccelerationCheckbox.mY);
-        assertEquals(206 + NewOptionsDialog.FROM_SELECTOR_FULLSCREEN_OFFSET_Y,
-                aDialog.mFullscreenCheckbox.mY);
-        assertEquals(206 + NewOptionsDialog.FROM_SELECTOR_FULLSCREEN_OFFSET_Y,
-                aDialog.mDebugInfoCheckbox.mY, "the debug checkbox rides with the fullscreen row");
+        assertEquals(116, aDialog.mMusicVolumeSlider.mY, "music slider matches the in-level row");
+        assertEquals(143, aDialog.mSfxVolumeSlider.mY, "sfx slider matches the in-level row");
+        assertEquals(175, aDialog.mHardwareAccelerationCheckbox.mY, "hw-accel row matches");
+        assertEquals(206, aDialog.mFullscreenCheckbox.mY, "fullscreen row matches");
+        assertEquals(206, aDialog.mDebugInfoCheckbox.mY, "the debug checkbox rides with the fullscreen row");
+    }
+
+    @Test
+    void selectorVariantKeepsTheAlmanacHiddenButEvenSlots() {
+        // PORT deviation: upstream's selector-variant row offsets are dropped (compact layout),
+        // while the almanac button stays selector-hidden (upstream behaviour, restored after
+        // visual testing) — the two remaining buttons sit in their even slots
+        LawnApp app = newApp();
+        app.mPlayerInfo = app.mProfileMgr.addProfile("NewOptionsDialogTest");
+        app.mPlayerInfo.mLevel = 15; // canShowAlmanac would pass: finished adventure or level >= 15
+        NewOptionsDialog aDialog = newDialog(app, true);
+
+        assertFalse(aDialog.mAlmanacButton.mVisible, "the almanac stays selector-hidden");
+        assertEquals(284, aDialog.mDisclaimerButton.mY, "disclaimer rides the restart slot");
+        assertEquals(327, aDialog.mBackToMainButton.mY, "main-menu/credits slot");
     }
 
     @Test

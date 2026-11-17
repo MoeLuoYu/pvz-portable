@@ -130,11 +130,9 @@ public class NewOptionsDialog extends Dialog implements SliderListener, Checkbox
     public static final int BACK_TO_GAME_BUTTON_X = 30;
     public static final int BACK_TO_GAME_BUTTON_Y = 381;
 
-    // NewOptionsDialog.cpp:159-165 — extra vertical offsets applied when opened from the game selector
-    public static final int FROM_SELECTOR_MUSIC_OFFSET_Y = 5;
-    public static final int FROM_SELECTOR_SFX_OFFSET_Y = 10;
-    public static final int FROM_SELECTOR_HW_ACCEL_OFFSET_Y = 15;
-    public static final int FROM_SELECTOR_FULLSCREEN_OFFSET_Y = 20;
+    // PORT-NOTE (deviation): upstream's game-selector-variant extra offsets
+    // (NewOptionsDialog.cpp:159-165, 5/10/15/20px on the control rows) are dropped — see the
+    // PORT-NOTE in resize(). Both variants share the compact in-level layout.
     /** NewOptionsDialog.cpp:167-170 — the almanac button is pushed down for zen garden / tree of wisdom. */
     public static final int ZEN_TREE_ALMANAC_OFFSET_Y = 43;
 
@@ -348,14 +346,11 @@ public class NewOptionsDialog extends Dialog implements SliderListener, Checkbox
         mBackToGameButton.resize(BACK_TO_GAME_BUTTON_X, BACK_TO_GAME_BUTTON_Y,
                 mBackToGameButton.mWidth, mBackToGameButton.mHeight);
 
-        if (mFromGameSelector) {
-            mMusicVolumeSlider.mY += FROM_SELECTOR_MUSIC_OFFSET_Y;
-            mSfxVolumeSlider.mY += FROM_SELECTOR_SFX_OFFSET_Y;
-            mHardwareAccelerationCheckbox.mY += FROM_SELECTOR_HW_ACCEL_OFFSET_Y;
-            mAutoPauseCheckbox.mY += FROM_SELECTOR_HW_ACCEL_OFFSET_Y;
-            mDebugInfoCheckbox.mY += FROM_SELECTOR_FULLSCREEN_OFFSET_Y;
-            mFullscreenCheckbox.mY += FROM_SELECTOR_FULLSCREEN_OFFSET_Y;
-        }
+        // PORT-NOTE (deviation): upstream pushed the slider/checkbox rows down by 5-20px in the
+        // game-selector variant (NewOptionsDialog.cpp:159-165), which spread the controls apart;
+        // this port keeps both variants on the same compact in-level layout. The almanac button
+        // stays selector-hidden (upstream behaviour, restored after visual testing) — the compact
+        // rows just make the remaining two slots sit evenly.
 
         if (mApp.mGameMode == GameMode.GAMEMODE_CHALLENGE_ZEN_GARDEN
                 || mApp.mGameMode == GameMode.GAMEMODE_TREE_OF_WISDOM) {
@@ -363,21 +358,12 @@ public class NewOptionsDialog extends Dialog implements SliderListener, Checkbox
         }
     }
 
-    // NewOptionsDialog.cpp:173-201
+    // NewOptionsDialog.cpp:173-201 — the selector-variant label offsets are dropped, see the
+    // PORT-NOTE in resize()
     @Override
     public void draw(Graphics g) {
         g.drawImage(Resources.getImageById(Resources.IMAGE_OPTIONS_MENUBACK_ID), 0, 0);
 
-        int aMusicOffset = 0;
-        int aSfxOffset = 0;
-        int a3DAccelOffset = 0;
-        int aFullScreenOffset = 0;
-        if (mFromGameSelector) {
-            aMusicOffset = FROM_SELECTOR_MUSIC_OFFSET_Y;
-            aSfxOffset = FROM_SELECTOR_SFX_OFFSET_Y;
-            a3DAccelOffset = FROM_SELECTOR_HW_ACCEL_OFFSET_Y;
-            aFullScreenOffset = FROM_SELECTOR_FULLSCREEN_OFFSET_Y;
-        }
         Color aTextColor = new Color(107, 109, 145);
 
         int aSliderLabelsX = mApp.getInteger(OPTION_DLG_SLIDER_LABELS_OFFSET_X, SLIDER_LABELS_OFFSET_X_DEFAULT);
@@ -387,21 +373,21 @@ public class NewOptionsDialog extends Dialog implements SliderListener, Checkbox
             g.setScale(aFontScale, aFontScale, 0.0f, 0.0f);
         }
         Font aFont = Resources.getFontById(Resources.FONT_DWARVENTODCRAFT18_ID);
-        PvzpCommon.pvzpDrawString(g, mApp.getString("OPTIONS_MUSIC_LABEL", "Music"), aSliderLabelsX, MUSIC_LABEL_Y + aMusicOffset,
+        PvzpCommon.pvzpDrawString(g, mApp.getString("OPTIONS_MUSIC_LABEL", "Music"), aSliderLabelsX, MUSIC_LABEL_Y,
                 aFont, aTextColor, DrawStringJustification.DS_ALIGN_RIGHT);
-        PvzpCommon.pvzpDrawString(g, mApp.getString("OPTIONS_SOUNDFX", "Sound FX"), aSliderLabelsX, SFX_LABEL_Y + aSfxOffset,
+        PvzpCommon.pvzpDrawString(g, mApp.getString("OPTIONS_SOUNDFX", "Sound FX"), aSliderLabelsX, SFX_LABEL_Y,
                 aFont, aTextColor, DrawStringJustification.DS_ALIGN_RIGHT);
         PvzpCommon.pvzpDrawString(g, mApp.getString("OPTIONS_3D_ACCELERATION", "3D Acceleration"), aCheckboxLabelsX,
-                HW_ACCEL_LABEL_Y + a3DAccelOffset, aFont, aTextColor, DrawStringJustification.DS_ALIGN_RIGHT);
+                HW_ACCEL_LABEL_Y, aFont, aTextColor, DrawStringJustification.DS_ALIGN_RIGHT);
         // The auto-pause checkbox shares the 3D-acceleration row from the left column; like every
         // other row, its label sits to the left of the checkbox (right-aligned into it).
         PvzpCommon.pvzpDrawString(g, mApp.getString("OPTIONS_AUTO_PAUSE", "Auto Pause"), AUTO_PAUSE_LABEL_X,
-                HW_ACCEL_LABEL_Y + a3DAccelOffset, aFont, aTextColor, DrawStringJustification.DS_ALIGN_RIGHT);
+                HW_ACCEL_LABEL_Y, aFont, aTextColor, DrawStringJustification.DS_ALIGN_RIGHT);
         // The debug-overlay checkbox is aligned with the fullscreen row from the left column.
         PvzpCommon.pvzpDrawString(g, mApp.getString("OPTIONS_DEBUG_INFO", "Debug Info"), DEBUG_INFO_LABEL_X,
-                DEBUG_INFO_LABEL_Y + aFullScreenOffset, aFont, aTextColor, DrawStringJustification.DS_ALIGN_RIGHT);
+                DEBUG_INFO_LABEL_Y, aFont, aTextColor, DrawStringJustification.DS_ALIGN_RIGHT);
         PvzpCommon.pvzpDrawString(g, mApp.getString("OPTIONS_FULL_SCREEN", "Full Screen"), aCheckboxLabelsX,
-                FULLSCREEN_LABEL_Y + aFullScreenOffset, aFont, aTextColor, DrawStringJustification.DS_ALIGN_RIGHT);
+                FULLSCREEN_LABEL_Y, aFont, aTextColor, DrawStringJustification.DS_ALIGN_RIGHT);
         if (aFontScale != 1.0f) {
             g.setScale(1.0f, 1.0f, 0.0f, 0.0f);
         }
