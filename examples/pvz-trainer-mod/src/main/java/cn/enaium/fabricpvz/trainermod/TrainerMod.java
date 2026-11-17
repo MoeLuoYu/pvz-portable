@@ -6,11 +6,16 @@ import cn.enaium.fabricpvz.portable.lawn.Board;
 import cn.enaium.fabricpvz.portable.lawn.Coin;
 import cn.enaium.fabricpvz.portable.lawn.DamageFlags;
 import cn.enaium.fabricpvz.portable.lawn.GameScenes;
+import cn.enaium.fabricpvz.portable.lawn.LawnCommon;
 import cn.enaium.fabricpvz.portable.lawn.MessageStyle;
-import cn.enaium.fabricpvz.portable.lawn.Resources;
 import cn.enaium.fabricpvz.portable.lawn.SeedPacket;
 import cn.enaium.fabricpvz.portable.lawn.Zombie;
-import cn.enaium.fabricpvz.portable.sexy.Color;
+import cn.enaium.fabricpvz.portable.lawn.widget.GameButton;
+import cn.enaium.fabricpvz.portable.lawn.widget.LawnDialog;
+import cn.enaium.fabricpvz.portable.lawn.widget.LawnStoneButton;
+import cn.enaium.fabricpvz.portable.sexy.Checkbox;
+import cn.enaium.fabricpvz.portable.sexy.CheckboxListener;
+import cn.enaium.fabricpvz.portable.sexy.Dialog;
 import cn.enaium.fabricpvz.portable.sexy.Widget;
 import cn.enaium.fabricpvz.portable.sexy.WidgetManager;
 import cn.enaium.fabricpvz.portable.sexy.graphics.Font;
@@ -20,25 +25,56 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * 修改器模组：左下角悬浮菜单（点击条目触发），零 Mixin。
+ * 修改器模组：左下角**可拖动的原生石头按钮**，点击展开 **PvZ 原生对话框**操作，
+ * 对话框底部"收 起"按钮收回折叠（回到悬浮按钮）。零 Mixin。
  *
- * <p>实现路径全部走公开面：
+ * <p>全部走公开面：
  * <ul>
- *   <li>悬浮菜单——一个自定义 {@link Widget} 加进 {@code WidgetManager}（公开 API）。
- *     命中测试按"后加入者优先"（{@code WidgetContainer.getWidgetAtHelper} 从列表尾向前找），
- *     面板保持最顶层时其矩形内的点击只到达面板、不穿透到棋盘；矩形外点击照常给棋盘。</li>
- *   <li>置顶维护——每级开始时棋盘会被重新加进管理器（排到面板之上），TICK 里检测到面板
- *     不在末位就摘下来重新加入；{@code mVisible=false} 的 widget 不参与命中测试，
- *     所以菜单只在 SCENE_PLAYING 显示、主菜单等界面自动放行。</li>
- *   <li>持续生效项（无限阳光/秒冷却）在 TICK 里逐 tick 强制写回；开关项复用游戏自带的
- *     作弊标志位（免费种植/自动收集），与隐码完全同源。</li>
- *   <li>字幕反馈走 {@code Board.displayAdvice}——不带方括号的字符串原样显示，
- *     不需要往语言文件里加键。</li>
+ *   <li>悬浮按钮——{@link TrainerButton}（{@code LawnStoneButton} 子类）：
+ *     绘制走游戏的 {@code GameButton.drawStoneButton}（IMAGE_BUTTON_LEFT/MIDDLE/RIGHT
+ *     原生三段石钮贴图，悬停/按下状态齐全）。拖动用标准 Sexy 派发：
+ *     mouseDown 记抓取偏移，TICK 里以 {@code WidgetManager.mLastMouseX/Y}（public）
+ *     跟随鼠标，mouseUp 按位移量区分"点击"（展开对话框）与"拖动"；松手派发给
+ *     last-down widget（即使指针已移出按钮也可靠收到）。</li>
+ *   <li>对话框——{@link TrainerDialog}（{@code LawnDialog} 子类）：原生棕框/金色标题、
+ *     原生 Checkbox（OPTIONS_CHECKBOX0/1 美术）与原生石钮；modal=true 自动暂停棋盘
+ *     （{@code modalOpen}/{@code modalClose} 既有机制），底部"收 起"是
+ *     {@code BUTTONS_FOOTER} 模式的标准 footer 按钮。</li>
+ *   <li>置顶维护——关卡重开时棋盘会排到按钮之上，TICK 检测按钮不在列表末位就
+ *     摘下重加；{@code mVisible=false} 不参与命中测试实现场景门控。</li>
  * </ul>
  */
 public final class TrainerMod implements ModInitializer {
 
     private static final Logger LOGGER = LoggerFactory.getLogger("pvz-trainer-mod");
+
+    /** 悬浮按钮不走监听派发（点击/拖动语义自理），传一个空壳监听避免 NPE。 */
+    private static final cn.enaium.fabricpvz.portable.sexy.ButtonListener NOOP_LISTENER =
+            new cn.enaium.fabricpvz.portable.sexy.ButtonListener() {
+                @Override
+                public void buttonPress(int theId) {
+                }
+
+                @Override
+                public void buttonDepress(int theId) {
+                }
+
+                @Override
+                public void buttonDownTick(int theId) {
+                }
+
+                @Override
+                public void buttonMouseEnter(int theId) {
+                }
+
+                @Override
+                public void buttonMouseLeave(int theId) {
+                }
+
+                @Override
+                public void buttonMouseMove(int theId, int theX, int theY) {
+                }
+            };
 
     /** 无限阳光强制写入的数值。 */
     private static final int INFINITE_SUN_VALUE = 9990;
@@ -47,44 +83,62 @@ public final class TrainerMod implements ModInitializer {
     private static final int KILL_FLAGS = DamageFlags.DAMAGE_HITS_SHIELD_AND_BODY
             | (1 << DamageFlags.DAMAGE_DOESNT_LEAVE_BODY);
 
+    /** 本模组的对话框 id：游戏 Dialogs 常量只用到 5x，取高位避开。 */
+    private static final int TRAINER_DIALOG_ID = 900;
+    /** 对话框内自建按钮/复选框的 id 段：避开 Dialog 的 1000/1001。 */
+    private static final int ID_KILL_ALL = 2005;
+    private static final int ID_CHECK_SUN = 2001;
+    private static final int ID_CHECK_PLANT = 2002;
+    private static final int ID_CHECK_COLLECT = 2003;
+    private static final int ID_CHECK_RECHARGE = 2004;
+
     private static boolean infiniteSun;
     private static boolean freePlanting;
     private static boolean autoCollect;
     private static boolean instantRecharge;
 
-    /** 最近一帧的棋盘（TICK 只在关卡里触发，菜单只在关卡里可见）。 */
+    private static cn.enaium.fabricpvz.portable.lawn.LawnApp sApp;
     private static Board sBoard;
-    /** 悬浮菜单；首次 TICK 时挂进 WidgetManager。 */
-    private static TrainerMenu sMenu;
+    /** 悬浮按钮；首次 TICK 时挂进 WidgetManager。 */
+    private static TrainerButton sButton;
+    /** 对话框打开中（抑制悬浮按钮显示与拖拽歧义）。 */
+    private static boolean sDialogOpen;
 
     @Override
     public void onInitialize() {
-        LOGGER.info("pvz-trainer-mod 已加载：关卡内左下角悬浮菜单（点击条目触发）");
+        LOGGER.info("pvz-trainer-mod 已加载：关卡内左下角悬浮按钮（可拖动），点击展开原生对话框");
         LawnEvents.TICK.register(TrainerMod::onTick);
     }
 
     private static void onTick(Board theBoard, int theTick) {
         sBoard = theBoard;
-        WidgetManager aManager = theBoard.mApp.mWidgetManager;
-        if (sMenu == null) {
-            sMenu = new TrainerMenu();
-            aManager.addWidget(sMenu);
+        sApp = theBoard.mApp;
+        WidgetManager aManager = sApp.mWidgetManager;
+        boolean aPlaying = sApp.mGameScene == GameScenes.SCENE_PLAYING;
+
+        if (sButton == null) {
+            sButton = new TrainerButton();
+            sButton.resize(8, sApp.mHeight - 33 - 8, 120, 33);
+            aManager.addWidget(sButton);
         }
 
-        // 只在关卡进行中显示；mVisible=false 的 widget 不参与命中测试，主菜单等界面不受影响
-        sMenu.mVisible = theBoard.mApp.mGameScene == GameScenes.SCENE_PLAYING;
+        // 只在关卡进行中且对话框未展开时显示；mVisible=false 不参与命中测试
+        sButton.mVisible = aPlaying && !sDialogOpen;
 
-        // 新关卡会把棋盘重新加入管理器（排到面板之上）：面板不在末位就摘下重新加入，恢复置顶
-        if (sMenu.mVisible && aManager.mWidgets.get(aManager.mWidgets.size() - 1) != sMenu) {
-            aManager.removeWidget(sMenu);
-            aManager.addWidget(sMenu);
+        // 新关卡会把棋盘重新加入管理器（排到按钮之上）：按钮不在末位就摘下重加，恢复置顶
+        if (sButton.mVisible && aManager.mWidgets.get(aManager.mWidgets.size() - 1) != sButton) {
+            aManager.removeWidget(sButton);
+            aManager.addWidget(sButton);
         }
+
+        // 拖动跟随：鼠标按住期间按钮每 tick 吸附到指针（抓取偏移保持相对位置）
+        sButton.tickDrag(aManager);
 
         // 持续生效项：逐 tick 强制写回
-        if (infiniteSun && sMenu.mVisible) {
+        if (infiniteSun && aPlaying) {
             theBoard.mSunMoney = INFINITE_SUN_VALUE;
         }
-        if (instantRecharge && sMenu.mVisible) {
+        if (instantRecharge && aPlaying) {
             for (SeedPacket aPacket : theBoard.mSeedBank.mSeedPackets) {
                 if (aPacket != null) {
                     aPacket.mRefreshCounter = 0;
@@ -105,97 +159,204 @@ public final class TrainerMod implements ModInitializer {
         return theOn ? "开" : "关";
     }
 
+    private static void killAllZombies(Board theBoard) {
+        int aKilled = 0;
+        for (Zombie aZombie : theBoard.mZombies) {
+            if (!aZombie.mDead) {
+                aZombie.takeDamage(KILL_DAMAGE, KILL_FLAGS); // 正常致死路径，播放死亡动画
+                aKilled++;
+            }
+        }
+        show(theBoard, "秒杀全场僵尸 ×" + aKilled);
+    }
+
+    // -------------------------------------------------------------------------------------
+
     /**
-     * 左下角悬浮菜单：表头可收起，条目点击触发。绘制与命中全部自绘，
-     * 不依赖游戏的 ButtonWidget（避免动用游戏的按钮资源与状态机）。
+     * 悬浮按钮：原生石头钮（drawStoneButton），可拖动，点击展开对话框。
+     * 不走 ButtonWidget 的监听派发（监听器是空壳），点击/拖动语义完全自理。
      */
-    private static final class TrainerMenu extends Widget {
+    private static final class TrainerButton extends LawnStoneButton {
 
-        private static final int WIDTH = 176;
-        private static final int ROW_HEIGHT = 20;
-        private static final int HEADER_HEIGHT = 22;
-        private static final int ITEM_COUNT = 5;
+        private static final int DRAG_THRESHOLD = 5;
 
-        private boolean mCollapsed;
-        private int mHoverRow = -1;
+        private boolean mDragging;
+        private boolean mDragged;
+        private int mGrabOffsetX;
+        private int mGrabOffsetY;
 
-        TrainerMenu() {
-            resize(8, 600 - HEADER_HEIGHT - ITEM_COUNT * ROW_HEIGHT - 8, WIDTH,
-                    HEADER_HEIGHT + ITEM_COUNT * ROW_HEIGHT);
+        TrainerButton() {
+            super(null, 7001, NOOP_LISTENER);
+            setLabel("修改器");
+            mHasAlpha = true;
+            mHasTransparencies = true;
+            mDoFinger = true;
+        }
+
+        @Override
+        public void mouseDown(int theX, int theY, int theBtnNum, int theClickCount) {
+            mIsDown = true;
+            mDragged = false;
+            // 指针的全局位置 = 按钮位置 + 控件内偏移
+            mGrabOffsetX = theX;
+            mGrabOffsetY = theY;
+            mDragging = true;
+        }
+
+        @Override
+        public void mouseUp(int theX, int theY, int theBtnNum, int theClickCount) {
+            mIsDown = false;
+            if (!mDragging) {
+                return;
+            }
+            mDragging = false;
+            if (!mDragged && sBoard != null) {
+                openDialog(); // 位移小于阈值：算点击，展开对话框
+            }
+        }
+
+        /** TICK 调用：拖动中让按钮吸附到指针（manager 的 public 全局鼠标坐标）。 */
+        void tickDrag(WidgetManager theManager) {
+            if (!mDragging) {
+                return;
+            }
+            int aGlobalX = theManager.mLastMouseX;
+            int aGlobalY = theManager.mLastMouseY;
+            int aNewX = aGlobalX - mGrabOffsetX;
+            int aNewY = aGlobalY - mGrabOffsetY;
+            if (Math.abs(aNewX - mX) > DRAG_THRESHOLD || Math.abs(aNewY - mY) > DRAG_THRESHOLD) {
+                mDragged = true;
+            }
+            if (mDragged) {
+                // 钳制在窗口逻辑尺寸内
+                int aClampedX = Math.max(0, Math.min(aNewX, sApp.mWidth - mWidth));
+                int aClampedY = Math.max(0, Math.min(aNewY, sApp.mHeight - mHeight));
+                resize(aClampedX, aClampedY, mWidth, mHeight);
+            }
+        }
+
+        private void openDialog() {
+            if (sDialogOpen || sBoard == null) {
+                return;
+            }
+            sDialogOpen = true;
+            sApp.playSample(cn.enaium.fabricpvz.portable.lawn.SoundType.SOUND_GRAVEBUTTON);
+            sApp.addDialog(TRAINER_DIALOG_ID, new TrainerDialog());
+        }
+    }
+
+    // -------------------------------------------------------------------------------------
+
+    /**
+     * 原生对话框：4 个原生复选框（前四项开关）+ 原生石钮"秒杀全场"，
+     * 底部 footer 按钮"收 起"（BUTTONS_FOOTER 的标准 1000 号按钮）收回折叠。
+     * modal=true：打开自动暂停棋盘，关闭自动恢复（modalOpen/modalClose 既有机制）。
+     */
+    private static final class TrainerDialog extends LawnDialog implements CheckboxListener {
+
+        private static final int ROW_HEIGHT = 34;
+
+        private final Checkbox mSunCheck;
+        private final Checkbox mPlantCheck;
+        private final Checkbox mCollectCheck;
+        private final Checkbox mRechargeCheck;
+        private final LawnStoneButton mKillButton;
+
+        TrainerDialog() {
+            super(sApp, TRAINER_DIALOG_ID, true, "修改器", "", "收 起", Dialog.BUTTONS_FOOTER);
+
+            mSunCheck = LawnCommon.makeNewCheckbox(ID_CHECK_SUN, this, infiniteSun);
+            mPlantCheck = LawnCommon.makeNewCheckbox(ID_CHECK_PLANT, this, freePlanting);
+            mCollectCheck = LawnCommon.makeNewCheckbox(ID_CHECK_COLLECT, this, autoCollect);
+            mRechargeCheck = LawnCommon.makeNewCheckbox(ID_CHECK_RECHARGE, this, instantRecharge);
+            mKillButton = GameButton.makeButton(ID_KILL_ALL, this, "秒杀全场");
+            mKillButton.resize(0, 0, 150, 33);
+
+            calcSize(60, 4 * ROW_HEIGHT + 46);
+        }
+
+        @Override
+        public void addedToManager(WidgetManager theWidgetManager) {
+            super.addedToManager(theWidgetManager);
+            addWidget(mSunCheck);
+            addWidget(mPlantCheck);
+            addWidget(mCollectCheck);
+            addWidget(mRechargeCheck);
+            addWidget(mKillButton);
+        }
+
+        @Override
+        public void removedFromManager(WidgetManager theWidgetManager) {
+            removeWidget(mSunCheck);
+            removeWidget(mPlantCheck);
+            removeWidget(mCollectCheck);
+            removeWidget(mRechargeCheck);
+            removeWidget(mKillButton);
+            super.removedFromManager(theWidgetManager);
+        }
+
+        @Override
+        public void resize(int theX, int theY, int theWidth, int theHeight) {
+            super.resize(theX, theY, theWidth, theHeight); // 先让基类排好标题与 footer 按钮
+
+            int aLeft = getLeft();
+            int aTop = getTop();
+            mSunCheck.resize(aLeft, aTop + 0 * ROW_HEIGHT, 24, 24);
+            mPlantCheck.resize(aLeft, aTop + 1 * ROW_HEIGHT, 24, 24);
+            mCollectCheck.resize(aLeft, aTop + 2 * ROW_HEIGHT, 24, 24);
+            mRechargeCheck.resize(aLeft, aTop + 3 * ROW_HEIGHT, 24, 24);
+            mKillButton.resize(aLeft, aTop + 4 * ROW_HEIGHT + 4, 150, 33);
         }
 
         @Override
         public void draw(Graphics g) {
-            Font aFont = Resources.getFontById(Resources.FONT_BRIANNETOD12_ID);
+            super.draw(g);
+
+            // 条目文字：画在每个复选框右侧（基类只画标题与正文）
+            Font aFont = cn.enaium.fabricpvz.portable.lawn.Resources
+                    .getFontById(cn.enaium.fabricpvz.portable.lawn.Resources.FONT_BRIANNETOD12_ID);
             g.setFont(aFont);
-
-            int aHeight = mCollapsed ? HEADER_HEIGHT : HEADER_HEIGHT + ITEM_COUNT * ROW_HEIGHT;
-            g.setColor(new Color(0, 0, 0, 170));
-            g.fillRect(0, 0, WIDTH, aHeight);
-            g.setColor(new Color(255, 255, 255, 90));
-            g.drawRect(0, 0, WIDTH, aHeight);
-
-            // 表头
-            g.setColor(new Color(255, 255, 255, 60));
-            if (mHoverRow == 0) {
-                g.fillRect(1, 1, WIDTH - 2, HEADER_HEIGHT - 2);
-            }
-            g.setColor(new Color(255, 220, 80));
-            g.drawString(mCollapsed ? "修改器 ▸" : "修改器 ▾", 8, 4 + aFont.mAscent);
-
-            if (mCollapsed) {
-                return;
-            }
-
-            // 功能条目
-            String[] aNames = {"无限阳光", "免费种植", "自动收集", "秒冷却", "秒杀全场"};
-            boolean[] aStates = {infiniteSun, freePlanting, autoCollect, instantRecharge, false};
-            for (int i = 0; i < ITEM_COUNT; i++) {
-                int aRow = i + 1;
-                int aY = HEADER_HEIGHT + i * ROW_HEIGHT;
-                if (mHoverRow == aRow) {
-                    g.setColor(new Color(255, 255, 255, 40));
-                    g.fillRect(1, aY + 1, WIDTH - 2, ROW_HEIGHT - 2);
-                }
-                g.setColor(new Color(255, 255, 255));
-                g.drawString(aNames[i], 8, aY + (ROW_HEIGHT - aFont.mHeight) / 2 + aFont.mAscent);
-                if (i < 4) {
-                    g.setColor(aStates[i] ? new Color(120, 255, 120) : new Color(150, 150, 150));
-                    g.drawString(aStates[i] ? "开" : "关", WIDTH - 30, aY + (ROW_HEIGHT - aFont.mHeight) / 2 + aFont.mAscent);
-                }
+            String[] aNames = {"无限阳光", "免费种植", "自动收集", "秒冷却"};
+            int aLeft = getLeft() + 32;
+            for (int i = 0; i < aNames.length; i++) {
+                g.setColor(new cn.enaium.fabricpvz.portable.sexy.Color(232, 218, 160));
+                g.drawString(aNames[i], aLeft, getTop() + i * ROW_HEIGHT + 6);
             }
         }
 
+        // Dialog 的 ButtonListener：1000 = footer"收 起"（折叠回悬浮按钮），2005 = 秒杀
         @Override
-        public void mouseMove(int x, int y) {
-            mHoverRow = rowAt(x, y);
+        public void buttonDepress(int theId) {
+            if (theId == Dialog.ID_FOOTER) {
+                sDialogOpen = false;
+                sApp.killDialog(mId);
+                return;
+            }
+            if (theId == ID_KILL_ALL && sBoard != null) {
+                killAllZombies(sBoard);
+                return;
+            }
+            super.buttonDepress(theId);
         }
 
+        // CheckboxListener：开关即写状态（免费种植/自动收集与隐码同源标志位）
         @Override
-        public void mouseDown(int x, int y, int theBtnNum, int theClickCount) {
-            int aRow = rowAt(x, y);
-            if (aRow == 0) {
-                mCollapsed = !mCollapsed; // 收起后高度变化，重新适配矩形
-                resize(mX, mY, WIDTH, mCollapsed ? HEADER_HEIGHT : HEADER_HEIGHT + ITEM_COUNT * ROW_HEIGHT);
-                return;
-            }
-            if (sBoard == null) {
-                return;
-            }
-            switch (aRow) {
-                case 1 -> {
-                    infiniteSun = !infiniteSun;
-                    show(sBoard, "无限阳光：" + onOff(infiniteSun));
+        public void checkboxChecked(int theId, boolean theChecked) {
+            super.checkboxChecked(); // 保留基类的按键音
+            switch (theId) {
+                case ID_CHECK_SUN -> {
+                    infiniteSun = theChecked;
+                    show(sBoard, "无限阳光：" + onOff(theChecked));
                 }
-                case 2 -> {
-                    freePlanting = !freePlanting;
-                    sBoard.mApp.mEasyPlantingCheat = freePlanting; // 与 cheatplant 隐码同源标志位
-                    show(sBoard, "免费种植：" + onOff(freePlanting));
+                case ID_CHECK_PLANT -> {
+                    freePlanting = theChecked;
+                    sBoard.mApp.mEasyPlantingCheat = theChecked;
+                    show(sBoard, "免费种植：" + onOff(theChecked));
                 }
-                case 3 -> {
-                    autoCollect = !autoCollect;
-                    sBoard.mApp.mAutoCollectCheat = autoCollect; // 与 lazyclick 隐码同源标志位
-                    if (autoCollect) {
+                case ID_CHECK_COLLECT -> {
+                    autoCollect = theChecked;
+                    sBoard.mApp.mAutoCollectCheat = theChecked;
+                    if (theChecked) {
                         // 开启瞬间收走场上已有的拾取物（新刷出的由游戏自己的标志位处理）
                         for (Coin aCoin : sBoard.mCoins) {
                             if (!aCoin.mDead && !aCoin.mIsBeingCollected) {
@@ -203,40 +364,15 @@ public final class TrainerMod implements ModInitializer {
                             }
                         }
                     }
-                    show(sBoard, "自动收集：" + onOff(autoCollect));
+                    show(sBoard, "自动收集：" + onOff(theChecked));
                 }
-                case 4 -> {
-                    instantRecharge = !instantRecharge;
-                    show(sBoard, "秒冷却：" + onOff(instantRecharge));
-                }
-                case 5 -> {
-                    int aKilled = 0;
-                    for (Zombie aZombie : sBoard.mZombies) {
-                        if (!aZombie.mDead) {
-                            aZombie.takeDamage(KILL_DAMAGE, KILL_FLAGS); // 正常致死路径，播放死亡动画
-                            aKilled++;
-                        }
-                    }
-                    show(sBoard, "秒杀全场僵尸 ×" + aKilled);
+                case ID_CHECK_RECHARGE -> {
+                    instantRecharge = theChecked;
+                    show(sBoard, "秒冷却：" + onOff(theChecked));
                 }
                 default -> {
                 }
             }
-        }
-
-        /** 表头为 0；收起时其余行一律 -1。 */
-        private int rowAt(int x, int y) {
-            if (x < 0 || x >= WIDTH || y < 0) {
-                return -1;
-            }
-            if (y < HEADER_HEIGHT) {
-                return 0;
-            }
-            if (mCollapsed) {
-                return -1;
-            }
-            int aRow = (y - HEADER_HEIGHT) / ROW_HEIGHT + 1;
-            return aRow <= ITEM_COUNT ? aRow : -1;
         }
     }
 }
