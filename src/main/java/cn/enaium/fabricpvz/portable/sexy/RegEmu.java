@@ -346,11 +346,22 @@ public final class RegEmu {
     // Persistence (RegEmu.cpp:48-92)
     // ------------------------------------------------------------------
 
-    /** Ported from src/SexyAppFramework/misc/RegEmu.cpp:48 ({@code static void SaveToFile()}). */
+    /** Ported from src/SexyAppFramework/misc/RegEmu.cpp:48 ({@code static void SaveToFile()}).
+     * PORT-NOTE (deviation): the parent directory is created on demand — the config/ folder of the
+     * new registry location does not exist on a fresh install. */
     private static void saveToFile() {
         if (currFile.isEmpty()) {
             Common.logInfoLn("RegEmu: Filename not specified, can't save");
             return;
+        }
+
+        try {
+            java.nio.file.Path aParent = Paths.get(currFile).getParent();
+            if (aParent != null) {
+                Files.createDirectories(aParent);
+            }
+        } catch (IOException e) {
+            Common.logInfoLn("RegEmu: Couldn't create folder for '{}'", currFile);
         }
 
         try (OutputStream aFile = new FileOutputStream(currFile)) {

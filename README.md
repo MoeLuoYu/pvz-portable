@@ -8,7 +8,7 @@
 
 游戏需要零售版文件（`main.pak` 和一个 `properties/` 目录）。它按以下顺序查找，命中即止：`-resdir <path>`（游戏参数）、`-Dpvz.resDir=<path>`（JVM 参数）、`PVZ_RES_DIR`（环境变量）、工作目录、运行中的 jar 所在目录，以及本机的 Steam 版《植物大战僵尸》安装（App ID 3590，遍历每个库目录查找，包括 macOS 的 `Plants vs. Zombies.app/Contents/Resources` 布局）。
 
-存档目录采用游戏自身的默认值 `<资源目录>/savedata`——原版游戏存放存档的位置；无论以哪种方式启动（发行包脚本、开发运行或启动器），存档都在同一处：Minecraft 风格的版本包刻意不传 `-savedir`，因为把存档目录挂在启动器下面，玩家的存档就不在自己运行游戏时会写到的位置。`-savedir <path>` 游戏参数仍然可以覆盖它，这一点一如既往。
+存档目录采用游戏自身的默认值 `<资源目录>/savedata`——原版游戏存放存档的位置；无论以哪种方式启动（发行包脚本、开发运行或启动器），存档都在同一处：Minecraft 风格的版本包刻意不传 `-savedir`，因为把存档目录挂在启动器下面，玩家的存档就不在自己运行游戏时会写到的位置。`-savedir <path>` 游戏参数仍然可以覆盖它，这一点一如既往。设置项注册表 `registry.regemu` 单独放在 `<资源目录>/config/`（默认启动时；`-savedir` 与 `-trial`/`-demo` 的注册表仍留在各自隔离的存档目录里），config 文件夹缺失时保存前会自动创建。
 
 涉及启动器时有两点值得了解。第一，Minecraft 风格的启动器会把 `user.home` 重映射到它的游戏目录（HMCL 会传 `-Duser.home=<.minecraft 目录>`），因此 Steam 查找会同时从环境变量 `HOME` *和* `user.home` 取用户主目录——环境变量的优先，因为启动器不改的就是它。第二，如果一无所获，游戏会把搜索过的每个位置（以及本 JVM 的 `user.home`）记入日志，所以原因写在日志里而无需猜测：见 `../verification/VERIFICATION.md` 第 70 节。
 

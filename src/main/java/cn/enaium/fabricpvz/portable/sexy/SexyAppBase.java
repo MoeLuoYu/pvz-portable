@@ -167,6 +167,9 @@ public class SexyAppBase implements ButtonListener, DialogListener {
     public boolean mTrialLaunch;
     public boolean mDemoLaunch;
     public boolean mDebugLaunch;
+    /** PORT-NOTE (deviation): the launch used the plain "savedata" folder (no -savedir, not
+     * -trial/-demo) - the registry file moves to the launch dir's config/ folder in that case. */
+    private boolean mDefaultSaveDataDir;
     /** PORT-NOTE (deviation): shows the main-menu "unlock all content" button (see -quickunlock). */
     public boolean mQuickUnlockLaunch;
 
@@ -2206,7 +2209,15 @@ public class SexyAppBase implements ButtonListener, DialogListener {
             return;
         }
 
-        RegEmu.setRegFile(Common.getAppDataPath("registry.regemu"));
+        // PORT-NOTE (deviation): on a default launch the registry file lives in the launch dir's
+        // config/ folder (user request); -savedir and -trial/-demo keep theirs inside their
+        // (isolated) save folder - the save isolation relies on it. readFromRegistry callers that
+        // skip init (the headless fixtures) keep the app-data contract.
+        if (mDefaultSaveDataDir) {
+            RegEmu.setRegFile(Common.getResourcePath("config/registry.regemu"));
+        } else {
+            RegEmu.setRegFile(Common.getAppDataPath("registry.regemu"));
+        }
 
         int[] anInt = new int[1];
         if (registryReadInteger("MusicVolume", anInt)) {
@@ -3080,9 +3091,11 @@ public class SexyAppBase implements ButtonListener, DialogListener {
         if (!mCustomSaveDir.isEmpty()) {
             Common.setAppDataFolder(mCustomSaveDir);
         } else if (Common.getAppDataFolder().isEmpty()) {
-            // PORT-NOTE (deviation): -trial/-demo isolate their saves from the regular profile
+            // PORT-NOTE (deviation): -trial/-demo isolate their saves from the regular profile.
+            // The plain "savedata" folder marks a default launch - the registry moves to config/.
             String aSaveDir = mTrialLaunch ? "savedata_trial"
                     : mDemoLaunch ? "savedata_demo" : "savedata";
+            mDefaultSaveDataDir = !mTrialLaunch && !mDemoLaunch;
             Common.setAppDataFolder(Common.getResourcePath(aSaveDir));
         }
 

@@ -600,8 +600,9 @@ val installMcMods = tasks.register<Copy>("installMcMods") {
  * installation lists and can launch the version with the mods loaded - and its pre-launch repair
  * finds nothing to download, instead of going after vanilla's 146 MB `legacy` index.
  */
-/** What a reinstall of the version folder keeps: the saves, the mods and the assets the player placed. */
-val REINSTALL_KEEP = listOf("savedata", "mods", "main.pak", "properties")
+/** What a reinstall of the version folder keeps: the saves, the settings registry (config/), the
+ *  mods and the assets the player placed. */
+val REINSTALL_KEEP = listOf("savedata", "config", "mods", "main.pak", "properties")
 
 // Where a reinstall parks the keep between the move-aside and the move-back. A fixed path (not the
 // task's temporaryDir) because it must survive a FAILED run: the keep holds the player's saves and
