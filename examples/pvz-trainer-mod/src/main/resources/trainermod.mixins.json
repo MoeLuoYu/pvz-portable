@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "cn.enaium.fabricpvz.trainermod.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "mixins": [
+    "TrainerConfigKeyMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
