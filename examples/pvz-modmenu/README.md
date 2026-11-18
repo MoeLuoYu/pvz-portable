@@ -1,4 +1,4 @@
-# pvz-modmenu — 模组管理界面（ModMenu）
+# ModMenu — 模组管理界面
 
 游戏内的模组管理界面：**主菜单 → 游戏选项 → "模 组"按钮**（原"查看图鉴"槽位，
 由 Mixin 注入，仅主菜单变体显示）打开。
@@ -55,7 +55,7 @@ public final class YourModMenu implements cn.enaium.fabricpvz.modmenu.api.ModMen
 
 ```bash
 cd ../../ && ./gradlew distZip && cd examples/pvz-modmenu
-./gradlew build        # 产物 build/libs/pvz-modmenu-1.0.0.jar
+./gradlew build        # 产物 build/libs/modmenu-1.0.0.jar
 ```
 
 jar 放进版本目录 `mods/`（需同放 `fabric-api-<版本>.jar`）。

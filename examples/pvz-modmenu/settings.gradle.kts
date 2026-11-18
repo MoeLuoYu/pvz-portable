@@ -19,4 +19,4 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "pvz-modmenu"
+rootProject.name = "modmenu"

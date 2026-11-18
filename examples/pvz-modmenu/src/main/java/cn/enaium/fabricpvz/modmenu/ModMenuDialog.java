@@ -103,7 +103,7 @@ final class ModMenuDialog extends LawnDialog {
             aG.drawImage(Resources.getImageById(cn.enaium.fabricpvz.portable.lawn.ImageID.IMAGE_BUTTON_RIGHT), aW - Resources.getImageById(cn.enaium.fabricpvz.portable.lawn.ImageID.IMAGE_BUTTON_RIGHT).getWidth(), 0);
             mStoneStrip = anImage;
         } catch (RuntimeException e) {
-            org.slf4j.LoggerFactory.getLogger("pvz-modmenu").warn("石钮条拼接失败", e);
+            org.slf4j.LoggerFactory.getLogger("modmenu").warn("石钮条拼接失败", e);
         }
         return mStoneStrip;
     }
@@ -119,7 +119,7 @@ final class ModMenuDialog extends LawnDialog {
                 mButtonArt[i] = cn.enaium.fabricpvz.api.resource.ModImages.load(ModMenuMod.class,
                         List.of("art/website.png", "art/issue.png", "art/config.png").get(i));
             } catch (RuntimeException e) {
-                org.slf4j.LoggerFactory.getLogger("pvz-modmenu").warn("按钮图加载失败", e);
+                org.slf4j.LoggerFactory.getLogger("modmenu").warn("按钮图加载失败", e);
             }
         }
 
@@ -535,7 +535,7 @@ final class ModMenuDialog extends LawnDialog {
                 try {
                     anEntry.getEntrypoint().openConfig();
                 } catch (RuntimeException e) {
-                    org.slf4j.LoggerFactory.getLogger("pvz-modmenu")
+                    org.slf4j.LoggerFactory.getLogger("modmenu")
                             .warn("mod {} 的配置入口点抛出异常", theModId, e);
                 }
                 return;

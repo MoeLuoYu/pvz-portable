@@ -17,7 +17,7 @@ import org.slf4j.LoggerFactory;
  */
 public final class ModMenuMod implements ModInitializer {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger("pvz-modmenu");
+    private static final Logger LOGGER = LoggerFactory.getLogger("modmenu");
 
     /** 模组管理对话框 id（游戏 Dialogs 常量最高 5x，修改器模组占 900）。 */
     public static final int DIALOG_MODMENU = 920;
@@ -64,7 +64,7 @@ public final class ModMenuMod implements ModInitializer {
 
     @Override
     public void onInitialize() {
-        LOGGER.info("pvz-modmenu 已加载：主菜单游戏选项内打开模组管理界面");
+        LOGGER.info("modmenu 已加载：主菜单游戏选项内打开模组管理界面");
     }
 
     /** 打开模组管理界面（已在栈中则忽略）；选项对话框保持打开，返回时还在。 */

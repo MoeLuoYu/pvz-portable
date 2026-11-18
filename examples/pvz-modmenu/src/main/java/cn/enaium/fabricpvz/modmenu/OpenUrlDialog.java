@@ -34,7 +34,7 @@ import java.util.List;
  */
 final class OpenUrlDialog extends LawnDialog {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger("pvz-modmenu");
+    private static final Logger LOGGER = LoggerFactory.getLogger("modmenu");
 
     private static final String TITLE = "确定要打开以下网页？";
     private static final String WARNING = "永远不要打开你不信任的人提供的链接";
