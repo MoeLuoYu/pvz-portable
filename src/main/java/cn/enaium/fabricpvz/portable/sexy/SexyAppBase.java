@@ -1210,6 +1210,7 @@ public class SexyAppBase implements ButtonListener, DialogListener {
     public void doMainLoop() {
         while (!mShutdown.get()) {
             maybeReapplyWindowIcon();
+            maybeHandleInstanceExitRequest();
             if (mExitToTop) {
                 mExitToTop = false;
             }
@@ -3103,9 +3104,12 @@ public class SexyAppBase implements ButtonListener, DialogListener {
         // HandleGameAlreadyRunning was dead code in this SDL rewrite (nothing ever invoked it), so
         // the mOnlyAllowOneCopyToRun flag never did anything. A lock file in the save folder holds
         // the "one copy" claim for the process lifetime; a second launch fails to lock it and exits
-        // through HandleGameAlreadyRunning before creating a window. -cheat disables the flag and
-        // therefore the lock; -trial/-demo isolate their own lock files per save folder.
-        if (mOnlyAllowOneCopyToRun && !acquireInstanceLock()) {
+        // through HandleGameAlreadyRunning before creating a window - except under -debug, where
+        // the new copy ends the lock holder and starts in its place (takeoverInstanceLock).
+        // -cheat disables the flag and therefore the lock; -trial/-demo isolate their own lock
+        // files per save folder.
+        if (mOnlyAllowOneCopyToRun && !acquireInstanceLock()
+                && !(mDebugLaunch && takeoverInstanceLock())) {
             handleGameAlreadyRunning();
         }
 
@@ -3193,24 +3197,58 @@ public class SexyAppBase implements ButtonListener, DialogListener {
     private java.nio.channels.FileChannel mInstanceLockChannel;
     private java.nio.channels.FileLock mInstanceLock;
 
+    /** The save-folder {@code instance.lock} file; its first line is the live holder's pid. */
+    private static java.nio.file.Path instanceLockFile() {
+        return java.nio.file.Path.of(Common.getAppDataFolder()).resolve("instance.lock");
+    }
+
+    /**
+     * The save-folder {@code instance.exit} request file: its first line names the pid of the lock
+     * holder a -debug takeover asks to end itself through the clean exit path.
+     */
+    private static java.nio.file.Path instanceExitRequestFile() {
+        return java.nio.file.Path.of(Common.getAppDataFolder()).resolve("instance.exit");
+    }
+
+    /** The locked byte range of the exclusive claim, past the recorded pid (arbitrary content). */
+    private static final long INSTANCE_LOCK_REGION_OFFSET = 1000;
+    private static final long INSTANCE_LOCK_REGION_SIZE = 8;
+
     /**
      * Claims the single-instance lock - an {@code instance.lock} file in the save folder held via a
-     * FileLock for the whole process. False when another live copy already holds it; IO failures
-     * fail open (the game starts) with a warning.
+     * FileLock for the whole process. The holder's pid sits in the file's first line so a -debug
+     * launch can end the holder and take the lock over (see takeoverInstanceLock); the exclusive
+     * claim is a byte-range lock past the content, because a whole-file lock would also lock
+     * readers out of the pid on Windows. False when another live copy already holds it; IO
+     * failures fail open (the game starts) with a warning.
      */
     private boolean acquireInstanceLock() {
         try {
-            java.nio.file.Path aLockFile = java.nio.file.Path.of(Common.getAppDataFolder())
-                    .resolve("instance.lock");
+            java.nio.file.Path aLockFile = instanceLockFile();
             Files.createDirectories(aLockFile.getParent());
             mInstanceLockChannel = java.nio.channels.FileChannel.open(aLockFile,
                     java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.WRITE);
-            mInstanceLock = mInstanceLockChannel.tryLock();
+            try {
+                mInstanceLock = mInstanceLockChannel.tryLock(INSTANCE_LOCK_REGION_OFFSET,
+                        INSTANCE_LOCK_REGION_SIZE, false);
+            } catch (java.nio.channels.OverlappingFileLockException theException) {
+                // a second claim from within this same JVM throws instead of returning null
+                // (tests init several apps in one JVM); fail open like every other broken lock
+                mInstanceLockChannel.close();
+                mInstanceLockChannel = null;
+                Common.logWarnLn("instance lock already held by this JVM (continuing)");
+                return true;
+            }
             if (mInstanceLock == null) {
                 mInstanceLockChannel.close();
                 mInstanceLockChannel = null;
                 return false;
             }
+            // record the holder pid (first line; any older longer content stays after the newline)
+            mInstanceLockChannel.position(0);
+            mInstanceLockChannel.write(java.nio.ByteBuffer.wrap(
+                    (Long.toString(ProcessHandle.current().pid()) + "\n")
+                            .getBytes(java.nio.charset.StandardCharsets.US_ASCII)));
             return true;
         } catch (IOException theException) {
             Common.logWarnLn("instance lock failed (continuing): {}", theException.toString());
@@ -3231,6 +3269,126 @@ public class SexyAppBase implements ButtonListener, DialogListener {
         } catch (IOException theException) {
             Common.logWarnLn("instance lock release failed: {}", theException.toString());
         }
+    }
+
+    /** The holder pid recorded in {@code instance.lock}'s first line; -1 when missing or unreadable. */
+    private long readInstanceLockHolderPid() {
+        try {
+            String aFirstLine = Files.readString(instanceLockFile()).split("\n", 2)[0].trim();
+            return aFirstLine.isEmpty() ? -1 : Long.parseLong(aFirstLine);
+        } catch (IOException | NumberFormatException theException) {
+            return -1;
+        }
+    }
+
+    /** Sleeps in small steps until the process is gone or {@code theTimeoutMs} have passed. */
+    private static boolean waitForProcessExit(ProcessHandle theProcess, long theTimeoutMs) {
+        long aDeadline = System.currentTimeMillis() + theTimeoutMs;
+        while (theProcess.isAlive() && System.currentTimeMillis() < aDeadline) {
+            try {
+                Thread.sleep(50);
+            } catch (InterruptedException theException) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        return !theProcess.isAlive();
+    }
+
+    /**
+     * PORT-NOTE (deviation): under -debug a second launch does not quit - it ends the instance
+     * holding the lock and claims it, so one -debug session always replaces the previous one. The
+     * holder is asked to end itself through the clean exit path (see maybeHandleInstanceExitRequest)
+     * - terminating the process from outside would exit non-zero and the launcher would report a
+     * crash; {@code destroy()} stays only as the fallback for a holder too old or too stuck to
+     * answer the request. The holder pid comes from the lock file's first line; only a process that
+     * recorded itself there and still holds the byte-range lock can be this game (every real launch
+     * is a java.exe whose command line carries no "pvz" at all, so the command line is logged, not
+     * checked). A dead holder pid, or a lock that stays held after the kill, refuses the takeover.
+     */
+    private boolean takeoverInstanceLock() {
+        long aHolderPid = readInstanceLockHolderPid();
+        ProcessHandle aHolder = aHolderPid > 0 ? ProcessHandle.of(aHolderPid).orElse(null) : null;
+        if (aHolder == null) {
+            Common.logWarnLn("-debug instance takeover: lock holder pid {} is not running; quitting",
+                    aHolderPid);
+            return false;
+        }
+        String aCommand = aHolder.info().commandLine()
+                .orElseGet(() -> aHolder.info().command().orElse(""));
+        Common.logInfoLn("-debug instance takeover: asking the previous instance to exit (pid {}, command: {})",
+                aHolderPid, aCommand);
+        try {
+            Files.writeString(instanceExitRequestFile(), aHolderPid + "\n",
+                    java.nio.charset.StandardCharsets.US_ASCII);
+        } catch (IOException theException) {
+            Common.logWarnLn("-debug instance takeover: exit request failed to write: {}",
+                    theException.toString());
+        }
+        // the holder polls the request in its main loop; give it a few seconds to answer
+        if (!waitForProcessExit(aHolder, 5000)) {
+            Common.logWarnLn("-debug instance takeover: holder did not answer the exit request; killing");
+            aHolder.destroy();
+            if (!waitForProcessExit(aHolder, 2000)) {
+                aHolder.destroyForcibly();
+                waitForProcessExit(aHolder, 2000);
+            }
+        }
+        // the FileLock dies with the process; retry in case the release lands late
+        for (int aAttempt = 0; aAttempt < 20; aAttempt++) {
+            if (acquireInstanceLock()) {
+                // consume the request so it cannot wait on a holder that is already gone
+                try {
+                    Files.deleteIfExists(instanceExitRequestFile());
+                } catch (IOException theException) {
+                    Common.logWarnLn("-debug instance takeover: exit request cleanup failed: {}",
+                            theException.toString());
+                }
+                return true;
+            }
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException theException) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        Common.logWarnLn("-debug instance takeover: lock still held after the kill; quitting");
+        return false;
+    }
+
+    /** The tick the exit-request file was last polled at (checked every ~300ms). */
+    private long mInstanceExitRequestCheckTick;
+
+    /**
+     * PORT-NOTE (deviation): the lock holder polls the {@code instance.exit} request file in the
+     * main loop; when the request names this process, the holder ends itself through {@link
+     * #doExit(int) doExit(0)} - the very path a window close takes - so the launcher sees a clean
+     * exit code 0 instead of a crash.
+     */
+    private void maybeHandleInstanceExitRequest() {
+        long aNow = ticks();
+        if (aNow - mInstanceExitRequestCheckTick < 30) { // ~300ms at the 10ms tick
+            return;
+        }
+        mInstanceExitRequestCheckTick = aNow;
+        String aFirstLine;
+        try {
+            aFirstLine = Files.readString(instanceExitRequestFile()).split("\n", 2)[0].trim();
+        } catch (IOException anException) {
+            return; // no request pending
+        }
+        if (!aFirstLine.equals(Long.toString(ProcessHandle.current().pid()))) {
+            return; // a stale request of a dead instance, or a race
+        }
+        Common.logInfoLn("instance exit request received; exiting through the clean path");
+        // consume the request so the takeover's own cleanup cannot race a later answer
+        try {
+            Files.deleteIfExists(instanceExitRequestFile());
+        } catch (IOException theException) {
+            Common.logWarnLn("instance exit request cleanup failed: {}", theException.toString());
+        }
+        doExit(0);
     }
 
     /**

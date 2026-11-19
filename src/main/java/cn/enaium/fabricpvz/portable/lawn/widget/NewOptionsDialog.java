@@ -261,9 +261,13 @@ public class NewOptionsDialog extends Dialog implements SliderListener, Checkbox
     /**
      * NewOptionsDialog.cpp:85-91 — when opened from the game selector the main-menu button acts as
      * the credits button iff the adventure is finished and the trial stage is not locked.
+     *
+     * <p>PORT-NOTE (deviation): it now acts as the credits button whenever the dialog is opened
+     * from the game selector, whether the adventure has been finished or not (user request: the
+     * entry is always visible). What the click does still differs - see {@link #buttonDepress}.
      */
     public boolean showBackToMainAsCredits() {
-        return mApp.hasFinishedAdventure() && !mApp.isTrialStageLocked();
+        return mFromGameSelector;
     }
 
     /**
@@ -513,7 +517,16 @@ public class NewOptionsDialog extends Dialog implements SliderListener, Checkbox
                 if (mFromGameSelector) {
                     mApp.killNewOptionsDialog();
                     mApp.killGameSelector();
-                    mApp.showAwardScreen(AwardType.AWARD_CREDITS_ZOMBIENOTE, false);
+                    if (mApp.hasFinishedAdventure()) {
+                        // the retail flow: the zombies' note, then the movie, ending with the
+                        // replay / main-menu buttons
+                        mApp.showAwardScreen(AwardType.AWARD_CREDITS_ZOMBIENOTE, false);
+                    } else {
+                        // PORT-NOTE (deviation): a save that has not beaten adventure skips the
+                        // note and the movie and lands straight on the scrolling final credits
+                        // list, with no replay button (the entry is always visible now)
+                        mApp.showCreditScreen(true);
+                    }
                 } else if (mApp.mBoard != null && mApp.mBoard.needSaveGame()) {
                     mApp.doConfirmBackToMain();
                 } else if (mApp.mBoard != null && mApp.mBoard.mCutScene != null && mApp.mBoard.mCutScene.isSurvivalRepick()) {

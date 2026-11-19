@@ -1185,7 +1185,17 @@ public class LawnApp extends SexyApp {
 
     // LawnApp::ShowCreditScreen (LawnApp.cpp:488)
     public void showCreditScreen() {
-        mCreditScreen = new CreditScreen(this);
+        showCreditScreen(false);
+    }
+
+    /**
+     * PORT-NOTE (deviation): the not-yet-completed entry ({@code theSkipToFinalCredits}) opens
+     * straight onto the scrolling final credits list with no replay button - the main-menu
+     * credits entry is always visible and skips the zombie note and the movie for a save that
+     * has not beaten adventure yet.
+     */
+    public void showCreditScreen(boolean theSkipToFinalCredits) {
+        mCreditScreen = new CreditScreen(this, theSkipToFinalCredits);
         mCreditScreen.resize(0, 0, mWidth, mHeight);
         mWidgetManager.addWidget(mCreditScreen);
         mWidgetManager.bringToBack(mCreditScreen);

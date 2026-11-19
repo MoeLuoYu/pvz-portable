@@ -487,45 +487,44 @@ public class ZenGarden {
     /**
      * Ported from src/Lawn/ZenGarden.cpp:407-453 (ZenGarden::GetPlantSellPrice).
      *
-     * <p>PORT-NOTE (deviation): the upstream rewrite's table reads 150/200/250/300 and
-     * 150/300/500/800/1000 - a transcription slip that dropped the retail ×10 (the rewrite pays
-     * {@code AddCoins(aPrice)} straight off that table). The retail game pays ten times these
-     * amounts (3000 for a full marigold, 8000 for a full regular plant, 10000 for an aquatic or
-     * nocturnal one), which is what makes the zen-garden economy work at all: a 2500-coin sprout
-     * would otherwise be a guaranteed loss. The table below is the retail values, so Dave's
-     * dialogue and the payout agree.
+     * <p>The table is the upstream values, and it must stay them: the payout enters the internal
+     * coin units that every balance and price in the game lives in, and the displays show those
+     * tenfold via {@link LawnApp#getMoneyString} (the bank label, the store prices, Dave's
+     * {MONEY}) - these amounts surface as the retail $1500/$3000/... there. Dave's sell prompt
+     * speaks that display money itself (see {@link #mouseDownWithMoneySign}); paying the tenfold
+     * here put the bank tenfold of the retail payout.
      */
     public int getPlantSellPrice(Plant thePlant) {
         PottedPlant aPottedPlant = pottedPlantFromIndex(thePlant.mPottedPlantIndex);
         if (aPottedPlant.mSeedType == SeedType.SEED_MARIGOLD) {
             if (aPottedPlant.mPlantAge == PottedPlantAge.PLANTAGE_SPROUT) {
-                return 1500;
+                return 150;
             }
             if (aPottedPlant.mPlantAge == PottedPlantAge.PLANTAGE_SMALL) {
-                return 2000;
+                return 200;
             }
             if (aPottedPlant.mPlantAge == PottedPlantAge.PLANTAGE_MEDIUM) {
-                return 2500;
+                return 250;
             }
             if (aPottedPlant.mPlantAge == PottedPlantAge.PLANTAGE_FULL) {
-                return 3000;
+                return 300;
             }
             zenAssert(false, "unexpected marigold plant age");
         }
         if (aPottedPlant.mPlantAge == PottedPlantAge.PLANTAGE_SPROUT) {
-            return 1500;
+            return 150;
         }
         if (aPottedPlant.mPlantAge == PottedPlantAge.PLANTAGE_SMALL) {
-            return 3000;
+            return 300;
         }
         if (aPottedPlant.mPlantAge == PottedPlantAge.PLANTAGE_MEDIUM) {
-            return 5000;
+            return 500;
         }
         if (aPottedPlant.mPlantAge == PottedPlantAge.PLANTAGE_FULL) {
             if (Plant.isNocturnal(aPottedPlant.mSeedType) || Plant.isAquatic(aPottedPlant.mSeedType)) {
-                return 10000;
+                return 1000;
             }
-            return 8000;
+            return 800;
         }
         throw new IllegalStateException("unreachable");
     }
@@ -543,7 +542,9 @@ public class ZenGarden {
 
         PottedPlant aPottedPlant = pottedPlantFromIndex(thePlant.mPottedPlantIndex);
         String aMessageText = mApp.getCrazyDaveText(1700);
-        aMessageText = PvzpCommon.pvzpReplaceNumberString(aMessageText, "{SELL_PRICE}", aPrice);
+        // the prompt speaks the display money: the payout stays the internal amount, which the
+        // bank shows tenfold via getMoneyString - Dave must quote what the bank will show
+        aMessageText = PvzpCommon.pvzpReplaceNumberString(aMessageText, "{SELL_PRICE}", aPrice * 10);
 
         String aPlantName;
         if (thePlant.mSeedType == SeedType.SEED_SPROUT && aPottedPlant.mSeedType == SeedType.SEED_MARIGOLD) {

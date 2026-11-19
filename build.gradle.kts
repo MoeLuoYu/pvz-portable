@@ -625,8 +625,12 @@ fun restoreReinstallKeep() {
             when {
                 // The version folder already has this entry (the game recreated it while a failed
                 // run's keep was parked): merge the keep over it rather than discarding it.
+                // A file that cannot be overwritten (the running game holds its mods jars open)
+                // is skipped: the destination copy is the live one, which is exactly the content
+                // the keep would restore.
                 target.isDirectory && kept.isDirectory ->
-                    kept.copyRecursively(target, overwrite = true)
+                    kept.copyRecursively(target, overwrite = true,
+                            onError = { _, _ -> OnErrorAction.SKIP })
                 // A rename inside one drive just moves it; the copy is the fallback for a
                 // cross-device target.
                 !target.exists() && kept.renameTo(target) -> {}

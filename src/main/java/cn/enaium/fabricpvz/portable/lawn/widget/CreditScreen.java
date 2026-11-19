@@ -15,6 +15,8 @@
  */
 package cn.enaium.fabricpvz.portable.lawn.widget;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import cn.enaium.fabricpvz.portable.lawn.Dialogs;
 import cn.enaium.fabricpvz.portable.lawn.DrawStringJustification;
@@ -72,6 +74,14 @@ public class CreditScreen extends Widget implements ButtonListener {
 
     /** CreditScreen.cpp:40 ({@code CREDIT_SCREEN_ANIM_RATE}). */
     public static final float CREDIT_SCREEN_ANIM_RATE = 0.3f;
+
+    /**
+     * The last {@code [CREDITS_ROLESn]} / {@code [CREDITS_NAMESn]} section the final credits list
+     * scans for. The Chinese GOTY bank ends at 15, and its closing section 15 (感谢您的支持！) is
+     * rendered at the very tail - after the port's own group and the disclaimer - so the walk
+     * stops one short of it (absent sections are skipped regardless).
+     */
+    public static final int CREDITS_SECTION_MAX = 14;
 
     // Layout of mMainMenuButton (CreditScreen.cpp:350-352).
     public static final int MAIN_MENU_BUTTON_X = 298;
@@ -461,8 +471,20 @@ public class CreditScreen extends Widget implements ButtonListener {
     public boolean mPreloaded;
     public int mLastDrawCount;
 
+    /**
+     * PORT-NOTE (deviation): the not-yet-completed entry opens straight onto the scrolling final
+     * credits list - no zombie note, no movie, no song, and the replay button never shows (the
+     * main-menu entry is always visible and must work for a save that has not beaten adventure).
+     */
+    public boolean mSkipToFinalCredits;
+
     /** Ported from src/Lawn/Widget/CreditScreen.cpp:326-378 (CreditScreen::CreditScreen). */
     public CreditScreen(LawnApp theApp) {
+        this(theApp, false);
+    }
+
+    public CreditScreen(LawnApp theApp, boolean theSkipToFinalCredits) {
+        mSkipToFinalCredits = theSkipToFinalCredits;
         mApp = theApp;
         mClip = false;
         mCreditsReanimID = ReanimationID.REANIMATIONID_NULL;
@@ -868,8 +890,13 @@ public class CreditScreen extends Widget implements ButtonListener {
 
     /**
      * Ported from src/Lawn/Widget/CreditScreen.cpp:735-803 (free function {@code DrawCreditsContent}).
-     * Walks the {@code [CREDITS_ROLES3..11]} / {@code [CREDITS_NAMES3..11]} sections, skipping the
+     * Walks the {@code [CREDITS_ROLES3..]} / {@code [CREDITS_NAMES3..]} sections, skipping the
      * missing ones, and returns the measured content height.
+     *
+     * <p>PORT-NOTE (deviation): upstream stops at section 11 (its English retail strings end
+     * there); the Chinese GOTY strings the player banks extend past it (本地化 / the localization
+     * team / 感谢您的支持！), so the walk scans up to {@link #CREDITS_SECTION_MAX} and simply skips
+     * whatever is absent.
      */
     private static int drawCreditsContent(Graphics g, int theYPos, boolean theDraw) {
         Font aTitleFont = Resources.getFontById(Resources.FONT_HOUSEOFTERROR28_ID);
@@ -890,7 +917,7 @@ public class CreditScreen extends Widget implements ButtonListener {
         }
         aYPos += aTitleFont.getLineSpacing() + 20;
 
-        for (int aSection = 3; aSection <= 11; aSection++) {
+        for (int aSection = 3; aSection <= CREDITS_SECTION_MAX; aSection++) {
             String aRolesKey = "[CREDITS_ROLES" + aSection + "]";
             Optional<String> aRolesLookup = PvzpStringFile.tryTranslate(aRolesKey);
             if (aRolesLookup.isEmpty()) {
@@ -914,38 +941,130 @@ public class CreditScreen extends Widget implements ButtonListener {
             String aNamesKey = "[CREDITS_NAMES" + aSection + "]";
             String aNames = PvzpStringFile.tryTranslate(aNamesKey).orElse("");
 
-            // Split roles and names by newline, draw side by side
-            int aRolePos = 0;
-            int aNamePos = 0;
-            while (aRolePos < aRoles.length() || aNamePos < aNames.length()) {
-                boolean aVisible = theDraw && aYPos > -aLineHeight && aYPos < GameConstants.BOARD_HEIGHT + aLineHeight;
-                if (aRolePos < aRoles.length()) {
-                    int aRoleEnd = aRoles.indexOf('\n', aRolePos);
-                    if (aRoleEnd == -1) {
-                        aRoleEnd = aRoles.length();
-                    }
-                    if (aVisible && aRoleEnd > aRolePos) {
-                        PvzpCommon.pvzpDrawString(g, aRoles.substring(aRolePos, aRoleEnd), ROLES_RIGHT_X, aYPos,
-                                aCreditsFont, Color.White, DrawStringJustification.DS_ALIGN_RIGHT);
-                    }
-                    aRolePos = aRoleEnd + 1;
-                }
-                if (aNamePos < aNames.length()) {
-                    int aNameEnd = aNames.indexOf('\n', aNamePos);
-                    if (aNameEnd == -1) {
-                        aNameEnd = aNames.length();
-                    }
-                    if (aVisible && aNameEnd > aNamePos) {
-                        PvzpCommon.pvzpDrawString(g, aNames.substring(aNamePos, aNameEnd), NAMES_LEFT_X, aYPos,
-                                aCreditsFont, Color.White, DrawStringJustification.DS_ALIGN_LEFT);
-                    }
-                    aNamePos = aNameEnd + 1;
-                }
-                aYPos += aLineHeight;
-            }
+            aYPos = drawCreditsRolesAndNames(g, aYPos, theDraw, aRoles, aNames);
             aYPos += 10;
         }
+
+        // PORT-NOTE (deviation): the tail of the list - the port's own group, the disclaimer's
+        // original text and the banked thanks note - appended after whatever the string bank
+        // carries (user request).
+        aYPos += 10;
+        aYPos = drawCreditsHeader(g, aYPos, theDraw, "JAVA REPLANTED EDITION", aCreditsFont);
+        aYPos = drawCreditsRolesAndNames(g, aYPos, theDraw,
+                "PROGRAMMING\nPRODUCT DESIGN\nSPECIAL THANKS",
+                "FABRICPVZ\nAME XU(MoeLuoYu)\nFABRICMC, PVZ-PORTABLE");
+        aYPos += 10;
+        aYPos = drawCreditsCenteredBlock(g, aYPos, theDraw, aCreditsFont,
+                wrapCreditsLines(aCreditsFont, NewOptionsDialog.DISCLAIMER_TEXT));
+
+        // the banked closing line ([CREDITS_ROLES15] - "^感谢您的支持！" on the Chinese GOTY),
+        // rendered after the disclaimer as the very last line of the list
+        Optional<String> aClosing = PvzpStringFile.tryTranslate("[CREDITS_ROLES15]");
+        if (aClosing.isPresent()) {
+            String aClosingText = aClosing.get();
+            if (!aClosingText.isEmpty() && aClosingText.charAt(0) == '^') {
+                aClosingText = aClosingText.substring(1);
+            }
+            if (!aClosingText.isEmpty()) {
+                aYPos += 10;
+                aYPos = drawCreditsHeader(g, aYPos, theDraw, aClosingText, aCreditsFont);
+            }
+        }
         return aYPos - aStartY;
+    }
+
+    /** One centered header line (the {@code ^} style the banked sections use for their titles). */
+    private static int drawCreditsHeader(Graphics g, int theYPos, boolean theDraw,
+            String theText, Font theFont) {
+        int aLineHeight = theFont.getLineSpacing();
+        if (theDraw && theYPos > -aLineHeight && theYPos < GameConstants.BOARD_HEIGHT + aLineHeight) {
+            PvzpCommon.pvzpDrawString(g, theText, GameConstants.BOARD_WIDTH / 2, theYPos,
+                    theFont, Color.White, DrawStringJustification.DS_ALIGN_CENTER);
+        }
+        return theYPos + aLineHeight + 10;
+    }
+
+    /** Centered text lines with no roles/names columns; a blank line advances half a line. */
+    private static int drawCreditsCenteredBlock(Graphics g, int theYPos, boolean theDraw,
+            Font theFont, List<String> theLines) {
+        int aLineHeight = theFont.getLineSpacing();
+        for (String aLine : theLines) {
+            if (aLine.isEmpty()) {
+                theYPos += aLineHeight / 2;
+                continue;
+            }
+            if (theDraw && theYPos > -aLineHeight && theYPos < GameConstants.BOARD_HEIGHT + aLineHeight) {
+                PvzpCommon.pvzpDrawString(g, aLine, GameConstants.BOARD_WIDTH / 2, theYPos,
+                        theFont, Color.White, DrawStringJustification.DS_ALIGN_CENTER);
+            }
+            theYPos += aLineHeight;
+        }
+        return theYPos;
+    }
+
+    /**
+     * One section body: the role / name rows drawn side by side (roles right-aligned on the left
+     * column, names left-aligned on the right), split by newline exactly like upstream's walk.
+     */
+    private static int drawCreditsRolesAndNames(Graphics g, int theYPos, boolean theDraw,
+            String theRoles, String theNames) {
+        Font aCreditsFont = Resources.getFontById(Resources.FONT_HOUSEOFTERROR16_ID);
+        int aLineHeight = aCreditsFont.getLineSpacing();
+        final int ROLES_RIGHT_X = GameConstants.BOARD_WIDTH / 2 - 15;
+        final int NAMES_LEFT_X = GameConstants.BOARD_WIDTH / 2 + 15;
+
+        int aRolePos = 0;
+        int aNamePos = 0;
+        while (aRolePos < theRoles.length() || aNamePos < theNames.length()) {
+            boolean aVisible = theDraw && theYPos > -aLineHeight && theYPos < GameConstants.BOARD_HEIGHT + aLineHeight;
+            if (aRolePos < theRoles.length()) {
+                int aRoleEnd = theRoles.indexOf('\n', aRolePos);
+                if (aRoleEnd == -1) {
+                    aRoleEnd = theRoles.length();
+                }
+                if (aVisible && aRoleEnd > aRolePos) {
+                    PvzpCommon.pvzpDrawString(g, theRoles.substring(aRolePos, aRoleEnd), ROLES_RIGHT_X, theYPos,
+                            aCreditsFont, Color.White, DrawStringJustification.DS_ALIGN_RIGHT);
+                }
+                aRolePos = aRoleEnd + 1;
+            }
+            if (aNamePos < theNames.length()) {
+                int aNameEnd = theNames.indexOf('\n', aNamePos);
+                if (aNameEnd == -1) {
+                    aNameEnd = theNames.length();
+                }
+                if (aVisible && aNameEnd > aNamePos) {
+                    PvzpCommon.pvzpDrawString(g, theNames.substring(aNamePos, aNameEnd), NAMES_LEFT_X, theYPos,
+                            aCreditsFont, Color.White, DrawStringJustification.DS_ALIGN_LEFT);
+                }
+                aNamePos = aNameEnd + 1;
+            }
+            theYPos += aLineHeight;
+        }
+        return theYPos;
+    }
+
+    /** Greedy word-wrap for the centered tail text (the disclaimer sentences run past the canvas). */
+    private static List<String> wrapCreditsLines(Font theFont, String theText) {
+        List<String> aLines = new ArrayList<>();
+        for (String aParagraph : theText.split("\n", -1)) {
+            if (aParagraph.isEmpty()) {
+                aLines.add("");
+                continue;
+            }
+            StringBuilder aLine = new StringBuilder();
+            for (String aWord : aParagraph.split(" ")) {
+                String aCandidate = aLine.length() == 0 ? aWord : aLine + " " + aWord;
+                if (aLine.length() > 0 && theFont.stringWidth(aCandidate) > GameConstants.BOARD_WIDTH - 80) {
+                    aLines.add(aLine.toString());
+                    aLine = new StringBuilder(aWord);
+                } else {
+                    aLine = new StringBuilder(aCandidate);
+                }
+            }
+            aLines.add(aLine.toString());
+        }
+        return aLines;
     }
 
     /** Ported from src/Lawn/Widget/CreditScreen.cpp:805-813 (CreditScreen::DrawFinalCredits). */
@@ -1249,8 +1368,19 @@ public class CreditScreen extends Widget implements ButtonListener {
         mUpdateCount++;
         if (mUpdateCount == 1) {
             preLoadCredits();
-            playReanim(1);
-            mApp.mMusic.makeSureMusicIsPlaying(MusicTune.MUSIC_TUNE_CREDITS_ZOMBIES_ON_YOUR_LAWN);
+            if (mSkipToFinalCredits) {
+                // start on the final credits list itself. The reanim object still exists (the
+                // draw path reads its transforms), but every track is hidden - the looping
+                // MAIN3 movie must not show behind the list (user report: the concert scenes
+                // kept playing behind the credits). No song plays either.
+                mCreditsPhase = CreditsPhase.CREDITS_END;
+                playReanim(3);
+                mApp.reanimationGet(mCreditsReanimID)
+                        .assignRenderGroupToPrefix("", Reanimation.RENDER_GROUP_HIDDEN);
+            } else {
+                playReanim(1);
+                mApp.mMusic.makeSureMusicIsPlaying(MusicTune.MUSIC_TUNE_CREDITS_ZOMBIES_ON_YOUR_LAWN);
+            }
             mApp.clearUpdateBacklog(false);
             mTimerSinceStart.start();
         } else if (mDontSync || mCreditsPhase == CreditsPhase.CREDITS_END) {
@@ -1316,7 +1446,9 @@ public class CreditScreen extends Widget implements ButtonListener {
             mCreditsPhaseCounter++;
             if (mCreditsPhaseCounter == 50) {
                 mMainMenuButton.setVisible(true);
-                mReplayButton.setVisible(true);
+                if (!mSkipToFinalCredits) {
+                    mReplayButton.setVisible(true);
+                }
             }
         }
 
