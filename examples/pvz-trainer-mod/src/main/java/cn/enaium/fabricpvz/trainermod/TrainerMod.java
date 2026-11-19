@@ -448,6 +448,29 @@ public final class TrainerMod implements ModInitializer {
         return pauseSpawning;
     }
 
+    /**
+     * 是否在修改器排除页（悬浮按钮隐藏、展开的修改器窗口自动收起）：
+     * 加载画面、戴夫商店、图鉴、制作人员场景（清单页与 MV 同属
+     * CreditScreen）、信件页（AwardScreen 的两种僵尸信类型）与三选关页
+     * （迷你游戏/益智模式/生存模式的关卡列表 ChallengeScreen）。
+     */
+    private static boolean isOnExcludedPage() {
+        if (sApp == null) {
+            return false;
+        }
+        boolean aLetterPage = sApp.mAwardScreen != null
+                && (sApp.mAwardScreen.mAwardType
+                        == cn.enaium.fabricpvz.portable.lawn.AwardType.AWARD_CREDITS_ZOMBIENOTE
+                || sApp.mAwardScreen.mAwardType
+                        == cn.enaium.fabricpvz.portable.lawn.AwardType.AWARD_HELP_ZOMBIENOTE);
+        return sApp.mGameScene == GameScenes.SCENE_LOADING
+                || sApp.getDialog(cn.enaium.fabricpvz.portable.lawn.Dialogs.DIALOG_STORE) != null
+                || sApp.getDialog(cn.enaium.fabricpvz.portable.lawn.Dialogs.DIALOG_ALMANAC) != null
+                || sApp.mCreditScreen != null
+                || aLetterPage
+                || sApp.mChallengeScreen != null;
+    }
+
     /** 关卡页"不掉阳光/不掉金币"开关（TrainerBoardCoinMixin 读取）。 */
     public static boolean noSunDropsEnabled() {
         return noSunDrops;
@@ -1444,23 +1467,20 @@ public final class TrainerMod implements ModInitializer {
                         MENU_BUTTON_WIDTH, aHeight);
             }
 
-            // 常驻：除加载画面、自身对话框展开、戴夫商店、制作人员场景（清单页与
-            // MV 同属 CreditScreen）与信件页（AwardScreen 的两种僵尸信类型）外都
-            // 显示；mVisible=false 不参与命中测试
-            boolean aLoading = sApp.mGameScene == GameScenes.SCENE_LOADING;
-            boolean aLetterPage = sApp.mAwardScreen != null
-                    && (sApp.mAwardScreen.mAwardType
-                            == cn.enaium.fabricpvz.portable.lawn.AwardType.AWARD_CREDITS_ZOMBIENOTE
-                    || sApp.mAwardScreen.mAwardType
-                            == cn.enaium.fabricpvz.portable.lawn.AwardType.AWARD_HELP_ZOMBIENOTE);
-            // "选关页" = 迷你游戏/益智模式/生存模式的关卡列表（ChallengeScreen）
-            boolean aChallengePage = sApp.mChallengeScreen != null;
-            mVisible = !aLoading && !sDialogOpen
-                    && sApp.getDialog(cn.enaium.fabricpvz.portable.lawn.Dialogs.DIALOG_STORE) == null
-                    && sApp.getDialog(cn.enaium.fabricpvz.portable.lawn.Dialogs.DIALOG_ALMANAC) == null
-                    && sApp.mCreditScreen == null
-                    && !aLetterPage
-                    && !aChallengePage;
+            // 常驻：除加载画面、自身对话框展开与各排除页（见
+            // isOnExcludedPage）外都显示；mVisible=false 不参与命中测试
+            boolean aExcluded = isOnExcludedPage();
+            mVisible = !aExcluded && !sDialogOpen;
+
+            // 排除页上展开的修改器窗口自动收起（从其他页打开状态跳转过去时）
+            if (aExcluded && sDialogOpen && sApp.getDialog(TRAINER_DIALOG_ID) != null) {
+                sApp.killDialog(TRAINER_DIALOG_ID);
+                sDialogOpen = false;
+                if (sAutoPauseOnOpen && sBoard != null
+                        && sApp.mGameScene == GameScenes.SCENE_PLAYING) {
+                    sBoard.pause(false);
+                }
+            }
 
             // 新界面/棋盘会把整屏 widget 重新加入管理器（排到按钮之上）：
             // 按钮不在末位就摘下重加，恢复置顶——配置关闭时不维护，被选项等后开窗口覆盖
