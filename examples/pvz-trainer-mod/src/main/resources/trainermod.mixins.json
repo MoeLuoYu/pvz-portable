@@ -4,7 +4,24 @@
   "package": "cn.enaium.fabricpvz.trainermod.mixin",
   "compatibilityLevel": "JAVA_25",
   "mixins": [
-    "TrainerConfigKeyMixin"
+    "TrainerBoardInputMixin",
+    "TrainerBoardCoinMixin",
+    "TrainerBoardMixin",
+    "TrainerBoardPlantMixin",
+    "TrainerBoardRenderMixin",
+    "TrainerBoardWavesMixin",
+    "TrainerChomperMixin",
+    "TrainerChallengeMixin",
+    "TrainerConfigKeyMixin",
+    "TrainerCursorPreviewMixin",
+    "TrainerGargantuarMixin",
+    "TrainerGridItemMixin",
+    "TrainerPlantCoinMixin",
+    "TrainerProjectileMixin",
+    "TrainerZombieCombatMixin",
+    "TrainerZombieBossMixin",
+    "TrainerZombieFlyerMixin",
+    "TrainerZombieMixin"
   ],
   "injectors": {
     "defaultRequire": 1

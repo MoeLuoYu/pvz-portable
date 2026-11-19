@@ -161,6 +161,39 @@ public final class TrainerMod implements ModInitializer {
     private static final int ID_CHECK_PLANT_FRAGILE = 2122;
     private static final int ID_CHECK_NO_CRATER = 2123;
     private static final int ID_CHECK_MUSHROOM_AWAKE = 2124;
+    private static final int ID_CHECK_REMOVE_FOG = 2125;
+    private static final int ID_CHECK_VASE_XRAY = 2126;
+    // 特效页"关卡机制复刻"开关：开启后把 mGameMode 压到对应挑战模式，
+    // 游戏自己的逐帧检查随即复刻该模式的机制；互斥
+    private static final int ID_CHECK_MODE_SEED_RAIN = 2127;
+    private static final int ID_CHECK_MODE_MINI_ZOMBIE = 2128;
+    private static final int ID_CHECK_MODE_COLUMN = 2129;
+    private static final int ID_CHECK_MODE_ZOMBIE_SPEED = 2130;
+    private static final int ID_CHECK_MODE_WHACK = 2131;
+    private static final int ID_CHECK_MODE_NEWTON = 2132;
+    private static final int ID_CHECK_MODE_GRAVE_DANGER = 2133;
+    private static final int ID_CHECK_MODE_STORMY_NIGHT = 2134;
+    private static final int ID_CHECK_MODE_BUNGEE_BLITZ = 2135;
+    private static final int ID_FIELD_SPEED = 2140;
+    private static final int ID_CHECK_ZOMBIE_EXPLODE = 2142;
+    private static final int ID_CHECK_ZOMBIE_NEVER_EXPLODE = 2143;
+    private static final int ID_CHECK_ZOMBIE_NO_CHILL = 2144;
+    private static final int ID_CHECK_ZOMBIE_NO_BUTTER = 2145;
+    private static final int ID_CHECK_ZOMBIE_HIDE = 2146;
+    private static final int ID_CHECK_ZOMBIE_SHOW = 2147;
+    private static final int ID_CHECK_ZOMBIE_NO_DANCERS = 2148;
+    private static final int ID_CHECK_ZOMBIE_NO_ICE_TRAIL = 2149;
+    private static final int ID_CHECK_ZOMBIE_INVINCIBLE = 2150;
+    private static final int ID_CHECK_ZOMBIE_WEAK = 2151;
+    private static final int ID_CHECK_ZOMBIE_NO_IMP_THROW = 2152;
+    private static final int ID_CHECK_ZOMBIE_GARG_EDIBLE = 2153;
+    private static final int ID_CHECK_ZOMBIE_FROZEN = 2154;
+    private static final int ID_CHECK_ZOMBIE_BOSS_FROZEN = 2155;
+    private static final int ID_CHECK_ZOMBIE_BALLOON_BOOM = 2156;
+    private static final int ID_CHECK_ZOMBIE_VACUUM = 2157;
+    private static final int ID_ZOMBIE_VACUUM_COL = 2158;
+    private static final int ID_ZOMBIE_OP = 2159;
+    private static final int ID_ZOMBIE_APPLY = 2160;
     private static final int ID_FIELD_ROW = 2025;
     private static final int ID_FIELD_COL = 2026;
     private static final int ID_FIELD_SEED = 2027;
@@ -180,10 +213,15 @@ public final class TrainerMod implements ModInitializer {
     private static final int ID_CARD_ATTACK = 2052;
     private static final int ID_CARD_PRICE = 2053;
     private static final int ID_CARD_COOLDOWN = 2054;
+    private static final int ID_SET_SUN = 2061;
+    private static final int ID_CHECK_NO_SUN_DROPS = 2162;
+    private static final int ID_CHECK_NO_COIN_DROPS = 2163;
+    private static final int ID_CHECK_ANY_PLANTING = 2164;
     private static final int TRAINER_SLOT_COUNT_DIALOG_ID = 904;
     private static final int TRAINER_ATTACK_DIALOG_ID = 905;
     private static final int TRAINER_PRICE_DIALOG_ID = 906;
     private static final int TRAINER_COOLDOWN_DIALOG_ID = 907;
+    private static final int TRAINER_SUN_DIALOG_ID = 908;
     private static final int ID_CHECK_HIDE_SEEDBANK = 2109;
     private static final int ID_CHECK_SHOW_SHOVEL = 2110;
     private static final int ID_CHECK_NO_COOLDOWN = 2112;
@@ -207,6 +245,8 @@ public final class TrainerMod implements ModInitializer {
     private static int sFieldZombie;
     private static int sFieldItem;
     private static int sFieldTune = 1;
+    /** 关卡页的倍速（1-10）：每帧在正常 tick 之外额外推进 updateGame（SPEED 模式同款）。 */
+    private static int sSpeedMult = 1;
     /** 种子/僵尸的可用 id 与名字（首次使用时按定义表构建）。 */
     private static int[] sSeedIds;
     private static String[] sSeedNames;
@@ -217,6 +257,11 @@ public final class TrainerMod implements ModInitializer {
     private static boolean freePlanting;
     private static boolean autoCollect;
     private static boolean pauseSpawning;
+    /** 关卡页开关：屏蔽阳光/金币币种的掉落生成（Board.addCoin 注入过滤）。 */
+    private static boolean noSunDrops;
+    private static boolean noCoinDrops;
+    /** 关卡页开关：任意种植——无视地形（花盆/莲叶/草皮/墓碑/弹坑/水面等）。 */
+    private static boolean anyPlanting;
     /** 无限金币：逐 tick 把当前存档金币顶到 999990（unlockall 的同一数值）。 */
     private static boolean infiniteCoins;
     /** 无限消耗品（花园）：逐 tick 把对应数量顶到 100（unlockall 的同一数值）。 */
@@ -238,6 +283,237 @@ public final class TrainerMod implements ModInitializer {
     private static boolean plantFragile;
     private static boolean noCrater;
     private static boolean mushroomAwake;
+    /** 场地页开关：取消迷雾绘制与花瓶内容透视（由 Board/GridItem 的 Mixin 应用）。 */
+    private static boolean removeFog;
+    private static boolean vaseXray;
+    /** 特效页"特性复刻"九开关：相互独立，不触碰 mGameMode——逐帧特性（雨滴/闪电/
+     * 种子掉落/双倍推进/锤子光标）由悬浮按钮 update 驱动，静态判定点（出怪缩小/
+     * 整列种植/抛物线/墓碑生成/空降出怪/雨雾绘制/锤击命中）由注入点 OR 入开关。
+     * 种子雨与暴风雨共用 Challenge.mChallengeStateCounter（上游同一暂存字段），二者互斥。 */
+    private static boolean seedRain;
+    private static boolean miniZombie;
+    private static boolean columnPlant;
+    private static boolean zombieSpeed;
+    private static boolean whackHammer;
+    private static boolean newtonGravity;
+    private static boolean graveDanger;
+    private static boolean stormyNight;
+    private static boolean bungeeBlitz;
+    /** 僵尸页的 15 个开关（多数由 TICK 每帧驱动，两个判定类由注入点读取）。 */
+    private static boolean zombieExplode;
+    private static boolean zombieNeverExplode;
+    private static boolean zombieNoChill;
+    private static boolean zombieNoButter;
+    private static boolean zombieHide;
+    private static boolean zombieShow;
+    private static boolean zombieNoDancers;
+    private static boolean zombieNoIceTrail;
+    private static boolean zombieInvincible;
+    private static boolean zombieWeak;
+    private static boolean zombieNoImpThrow;
+    private static boolean zombieGargEdible;
+    private static boolean zombieFrozen;
+    private static boolean zombieBossFrozen;
+    private static boolean zombieBalloonBoom;
+    private static boolean zombieVacuum;
+    /** 吸怪目标列（1-9）。 */
+    private static int sVacuumCol = 1;
+    /** 批量操作的当前选择（ZOMBIE_OP_NAMES 序号）。 */
+    private static int sZombieOpIndex;
+
+    /** 僵尸页各开关（ZombieBehaviourA/ZombieBehaviourB 注入点读取）。 */
+    public static boolean zombieNeverExplodeEnabled() {
+        return zombieNeverExplode;
+    }
+
+    public static boolean zombieNoDancersEnabled() {
+        return zombieNoDancers;
+    }
+
+    public static boolean zombieNoImpThrowEnabled() {
+        return zombieNoImpThrow;
+    }
+
+    public static boolean zombieGargEdibleEnabled() {
+        return zombieGargEdible;
+    }
+
+    public static boolean zombieInvincibleEnabled() {
+        return zombieInvincible;
+    }
+
+    /** 僵尸页"僵尸不动"开关（TrainerZombieMixin 的 isImmobilizied 注入读取）。 */
+    public static boolean zombieFrozenEnabled() {
+        return zombieFrozen;
+    }
+
+    /** 僵尸页"隐形切换"开关（隐形战争关 = 现形；TrainerZombieMixin 的 draw 注入读取）。 */
+    /** 僵尸页"僵尸现形"开关（隐形战争关的绘制判定注入读取）。 */
+    public static boolean zombieShowEnabled() {
+        return zombieShow;
+    }
+
+    /** 批量操作名（与 sZombieOpIndex 同序）。 */
+    private static final String[] ZOMBIE_OP_NAMES =
+            {"移除", "迷惑", "冻结", "减速", "黄油", "吹走", "变黑", "变大", "变小"};
+
+    /** 挑战模式的本地化名（定义表名字键优先过 lawnstrings，缺键回退原始键名——
+     *  limbo 页的键在部分资源包里没有收录，不显示 &lt;Missing …&gt;）。 */
+    private static String challengeName(int theMode) {
+        var aDef = cn.enaium.fabricpvz.portable.lawn.Challenge.getChallengeDefinition(theMode);
+        return cn.enaium.fabricpvz.portable.pvzp.PvzpStringFile.tryTranslate(aDef.mChallengeName)
+                .orElse(aDef.mChallengeName.replace("[", "").replace("]", ""));
+    }
+
+    /** 批量操作：对全场活僵尸执行所选操作，返回执行数量。 */
+    private static int applyZombieOperation(Board theBoard, int theOp) {
+        int aCount = 0;
+        // 迷惑/冻结/变大/变小不作用于僵王（boss 行为状态机不支持这些状态）
+        boolean aSkipBoss = theOp == 1 || theOp == 2 || theOp == 7 || theOp == 8;
+        for (Zombie aZombie : theBoard.mZombies) {
+            if (aZombie.mDead) {
+                continue;
+            }
+            if (aSkipBoss && aZombie.mZombieType
+                    == cn.enaium.fabricpvz.portable.lawn.ZombieType.ZOMBIE_BOSS) {
+                continue;
+            }
+            switch (theOp) {
+                case 0 -> aZombie.takeDamage(KILL_DAMAGE, KILL_FLAGS); // 移除：正常致死留尸体
+                case 1 -> {
+                    if (!aZombie.isDeadOrDying()) {
+                        aZombie.startMindControlled(); // 迷惑：mindcontrol 同款
+                    }
+                }
+                case 2 -> {
+                    if (!aZombie.isDeadOrDying() && !aZombie.mMindControlled) {
+                        aZombie.mIceTrapCounter = 300; // 冻结：冰封定身（排除已迷惑的）
+                        aZombie.applyChill(true);
+                    }
+                }
+                case 3 -> {
+                    if (!aZombie.isDeadOrDying()) {
+                        aZombie.applyChill(false); // 减速
+                    }
+                }
+                case 4 -> {
+                    if (!aZombie.isDeadOrDying()) {
+                        aZombie.applyButter(); // 黄油：applyButter 定身（黄油贴图照常）
+                    }
+                }
+                case 5 -> {
+                    if (!aZombie.isDeadOrDying()) {
+                        aZombie.mBlowingAway = true; // 吹走：mBlowingAway 推到 850 后 dieWithLoot
+                    }
+                }
+                case 6 -> {
+                    if (!aZombie.isDeadOrDying()) {
+                        aZombie.applyBurn(); // 变黑：火焰致死（烧焦动画）
+                    }
+                }
+                case 7 -> {
+                    if (!aZombie.isDeadOrDying()) {
+                        aZombie.mScaleZombie = Math.min(3.0f, aZombie.mScaleZombie * 1.5f); // 变大
+                    }
+                }
+                case 8 -> {
+                    if (!aZombie.isDeadOrDying()) {
+                        aZombie.mScaleZombie = Math.max(0.3f, aZombie.mScaleZombie / 1.5f); // 变小
+                    }
+                }
+                default -> {
+                }
+            }
+            aCount++;
+        }
+        return aCount;
+    }
+    /** 各逐帧特性已初始化/维护的棋盘：换关卡重放初始化，开关关闭时还原。 */
+    private static Board sStormBoard;
+    private static Board sSeedRainBoard;
+    private static Board sWhackBoard;
+
+    /** 场地页"去除浓雾"开关（TrainerBoardMixin 读取）。 */
+    public static boolean removeFogEnabled() {
+        return removeFog;
+    }
+
+    /** 场地页"花瓶透视"开关（TrainerGridItemMixin 读取）。 */
+    public static boolean vaseXrayEnabled() {
+        return vaseXray;
+    }
+
+    /** 关卡页"暂停出怪"开关（TrainerChallengeMixin 的打僵尸出怪注入读取）。 */
+    public static boolean pauseSpawningEnabled() {
+        return pauseSpawning;
+    }
+
+    /** 关卡页"不掉阳光/不掉金币"开关（TrainerBoardCoinMixin 读取）。 */
+    public static boolean noSunDropsEnabled() {
+        return noSunDrops;
+    }
+
+    public static boolean noCoinDropsEnabled() {
+        return noCoinDrops;
+    }
+
+    /** 关卡页"任意种植"开关（TrainerBoardPlantMixin 读取）。 */
+    public static boolean anyPlantingEnabled() {
+        return anyPlanting;
+    }
+
+    // 特效页九个特性复刻开关（各 Mixin 注入点与每帧驱动读取）
+    public static boolean seedRainEnabled() {
+        return seedRain;
+    }
+
+    public static boolean miniZombieEnabled() {
+        return miniZombie;
+    }
+
+    public static boolean columnPlantEnabled() {
+        return columnPlant;
+    }
+
+    public static boolean zombieSpeedEnabled() {
+        return zombieSpeed;
+    }
+
+    public static boolean whackHammerEnabled() {
+        return whackHammer;
+    }
+
+    public static boolean newtonGravityEnabled() {
+        return newtonGravity;
+    }
+
+    public static boolean graveDangerEnabled() {
+        return graveDanger;
+    }
+
+    public static boolean stormyNightEnabled() {
+        return stormyNight;
+    }
+
+    public static boolean bungeeBlitzEnabled() {
+        return bungeeBlitz;
+    }
+
+    /** 打僵尸开关的锤子光标装配（Challenge.startLevel 的 whack 分支同款）。 */
+    private static void setupWhackHammer(Board theBoard) {
+        theBoard.mCursorObject.mCursorType =
+                cn.enaium.fabricpvz.portable.lawn.CursorType.CURSOR_TYPE_HAMMER;
+        cn.enaium.fabricpvz.portable.pvzp.reanim.Reanimator.reanimatorEnsureDefinitionLoaded(
+                cn.enaium.fabricpvz.portable.lawn.ReanimationType.REANIM_HAMMER, true);
+        sApp.removeReanimation(theBoard.mCursorObject.mReanimCursorID);
+        var aHammer = sApp.addReanimation(-25.0f, 16.0f, 0,
+                cn.enaium.fabricpvz.portable.lawn.ReanimationType.REANIM_HAMMER);
+        aHammer.mIsAttachment = true;
+        aHammer.playReanim("anim_whack_zombie",
+                cn.enaium.fabricpvz.portable.lawn.ReanimLoopType.REANIM_PLAY_ONCE_AND_HOLD, 0, 24.0f);
+        aHammer.mAnimTime = 1.0f;
+        theBoard.mCursorObject.mReanimCursorID = sApp.reanimationGetID(aHammer);
+    }
 
     private static cn.enaium.fabricpvz.portable.lawn.LawnApp sApp;
     private static Board sBoard;
@@ -370,6 +646,67 @@ public final class TrainerMod implements ModInitializer {
             } else {
                 freePlanting = theBoard.mApp.mEasyPlantingCheat;
                 autoCollect = theBoard.mApp.mAutoCollectCheat;
+            }
+
+            // 僵尸页开关的每帧驱动（TICK 每 updateGame 恰一次，倍速下按倍数生效）
+            boolean aInvisiLevel = sApp.mGameMode
+                    == cn.enaium.fabricpvz.portable.lawn.GameMode.GAMEMODE_CHALLENGE_INVISIGHOUL;
+            float aVacuumX = zombieVacuum
+                    ? theBoard.gridToPixelX(sVacuumCol - 1, 0) : 0.0f;
+            for (Zombie aZombie : theBoard.mZombies) {
+                if (aZombie.mDead) {
+                    continue;
+                }
+                // "僵尸隐形"：仅非隐形战争关生效——勾选 mVisible=false 隐形，取消恢复；
+                // 隐形战争关的隐形由 draw 的模式判定实现，不受 mVisible 影响
+                if (!aInvisiLevel) {
+                    aZombie.mVisible = !zombieHide;
+                }
+                // 屏蔽寒冰减速：清零后必须重算动画速率——减速是动画速率减半（移动由
+                // 动画驱动），直接赋 0 绕过了"递减到 0 才调 updateAnimSpeed"的恢复路径
+                if (zombieNoChill && aZombie.mChilledCounter > 0) {
+                    aZombie.mChilledCounter = 0;
+                    aZombie.updateAnimSpeed();
+                }
+                // 屏蔽黄油：同理要调 removeButter（黄油贴图与定身一并解除）
+                if (zombieNoButter && aZombie.mButteredCounter > 0) {
+                    aZombie.mButteredCounter = 0;
+                    aZombie.removeButter();
+                }
+                if (zombieNoIceTrail) {
+                    theBoard.mIceMinX[aZombie.mRow] = cn.enaium.fabricpvz.portable.lawn.GameConstants.BOARD_ICE_START;
+                    theBoard.mIceTimer[aZombie.mRow] = 0;
+                }
+                if (zombieWeak && !aZombie.isDeadOrDying()) {
+                    aZombie.mBodyHealth = Math.min(aZombie.mBodyHealth, 1);
+                    aZombie.mHelmHealth = Math.min(aZombie.mHelmHealth, 1);
+                    aZombie.mShieldHealth = Math.min(aZombie.mShieldHealth, 1);
+                    aZombie.mFlyingHealth = Math.min(aZombie.mFlyingHealth, 1);
+                }
+                if (zombieBossFrozen && aZombie.mZombieType == cn.enaium.fabricpvz.portable.lawn.ZombieType.ZOMBIE_BOSS
+                        && aZombie.mZombiePhase == cn.enaium.fabricpvz.portable.lawn.ZombiePhase.PHASE_BOSS_IDLE
+                        && aZombie.mPhaseCounter > 0) {
+                    aZombie.mPhaseCounter = Math.max(aZombie.mPhaseCounter, 100); // 顶住待机计时，不进入攻击
+                }
+                if (zombieBalloonBoom && !aZombie.isDeadOrDying()
+                        && aZombie.mZombiePhase == cn.enaium.fabricpvz.portable.lawn.ZombiePhase.PHASE_BALLOON_FLYING) {
+                    aZombie.takeDamage(KILL_DAMAGE, KILL_FLAGS); // 飞行伤害打爆气球，余伤落本体
+                }
+                if (zombieVacuum && !aZombie.isDeadOrDying()
+                        && aZombie.mZombieType != cn.enaium.fabricpvz.portable.lawn.ZombieType.ZOMBIE_BOSS) {
+                    float aDelta = aVacuumX - aZombie.mPosX;
+                    aZombie.mPosX += Math.max(-8.0f, Math.min(8.0f, aDelta)); // 每帧最多吸 8px
+                }
+            }
+            if (zombieExplode) {
+                for (Zombie aZombie : theBoard.mZombies) {
+                    if (aZombie.mDead
+                            || aZombie.mZombieType != cn.enaium.fabricpvz.portable.lawn.ZombieType.ZOMBIE_JACK_IN_THE_BOX
+                            || aZombie.mZombiePhase != cn.enaium.fabricpvz.portable.lawn.ZombiePhase.PHASE_JACK_IN_THE_BOX_RUNNING) {
+                        continue;
+                    }
+                    aZombie.mPhaseCounter = 0; // 立即进入爆箱节奏
+                }
             }
         }
 
@@ -785,6 +1122,16 @@ public final class TrainerMod implements ModInitializer {
         show(sBoard, "金币已设置为 " + aPlayer.mCoins);
     }
 
+    /** "设置阳光"：直接写当前棋盘的阳光数（与无限阳光同一上限 9990）。 */
+    private static void setSun(int theSun) {
+        Board aBoard = sBoard;
+        if (aBoard == null) {
+            return;
+        }
+        aBoard.mSunMoney = Math.max(0, Math.min(9990, theSun));
+        show(aBoard, "阳光已设置为 " + aBoard.mSunMoney);
+    }
+
     /**
      * 刷新主菜单的选关解锁状态（选关器缓存显示状态，解锁后不重算的话按钮/奖杯要到
      * 离开菜单才更新——unlockall/tmpunlock 隐码的收尾同款）。
@@ -934,7 +1281,10 @@ public final class TrainerMod implements ModInitializer {
             var aDef = cn.enaium.fabricpvz.portable.lawn.Zombie.getZombieDefinition(i);
             if (aDef != null) {
                 aZombieIds.add(i);
-                aZombieNames.add("[" + i + "] " + aDef.mZombieName);
+                // 与植物列表同源：定义表键名过 PvzpStringFile 翻译（优先 lawnstrings
+                // 本地化，查不到回退代码内置英文名）
+                aZombieNames.add(cn.enaium.fabricpvz.portable.pvzp.PvzpStringFile.translate(
+                        "[" + aDef.mZombieName + "]"));
             }
         }
         sZombieIds = aZombieIds.stream().mapToInt(Integer::intValue).toArray();
@@ -1094,9 +1444,23 @@ public final class TrainerMod implements ModInitializer {
                         MENU_BUTTON_WIDTH, aHeight);
             }
 
-            // 常驻：除加载画面与自身对话框展开外都显示；mVisible=false 不参与命中测试
+            // 常驻：除加载画面、自身对话框展开、戴夫商店、制作人员场景（清单页与
+            // MV 同属 CreditScreen）与信件页（AwardScreen 的两种僵尸信类型）外都
+            // 显示；mVisible=false 不参与命中测试
             boolean aLoading = sApp.mGameScene == GameScenes.SCENE_LOADING;
-            mVisible = !aLoading && !sDialogOpen;
+            boolean aLetterPage = sApp.mAwardScreen != null
+                    && (sApp.mAwardScreen.mAwardType
+                            == cn.enaium.fabricpvz.portable.lawn.AwardType.AWARD_CREDITS_ZOMBIENOTE
+                    || sApp.mAwardScreen.mAwardType
+                            == cn.enaium.fabricpvz.portable.lawn.AwardType.AWARD_HELP_ZOMBIENOTE);
+            // "选关页" = 迷你游戏/益智模式/生存模式的关卡列表（ChallengeScreen）
+            boolean aChallengePage = sApp.mChallengeScreen != null;
+            mVisible = !aLoading && !sDialogOpen
+                    && sApp.getDialog(cn.enaium.fabricpvz.portable.lawn.Dialogs.DIALOG_STORE) == null
+                    && sApp.getDialog(cn.enaium.fabricpvz.portable.lawn.Dialogs.DIALOG_ALMANAC) == null
+                    && sApp.mCreditScreen == null
+                    && !aLetterPage
+                    && !aChallengePage;
 
             // 新界面/棋盘会把整屏 widget 重新加入管理器（排到按钮之上）：
             // 按钮不在末位就摘下重加，恢复置顶——配置关闭时不维护，被选项等后开窗口覆盖
@@ -1104,6 +1468,72 @@ public final class TrainerMod implements ModInitializer {
                     && aManager.mWidgets.get(aManager.mWidgets.size() - 1) != this) {
                 aManager.removeWidget(this);
                 aManager.addWidget(this);
+            }
+
+            // 特效页"特性复刻"开关：各特性独立，不触碰 mGameMode——逐帧特性直接调
+            // 游戏自己的实现（雨滴溅落/闪电状态机/种子掉落/双倍推进），锤子光标在
+            // 这里装配；一次性初始化随棋盘换代重放。静态判定点（出怪缩小/整列种植/
+            // 抛物线/墓碑生成/空降出怪/雨雾绘制/锤击命中）由注入点 OR 入开关
+            Board aBoard = sApp.mBoard;
+            if (aBoard != null && sApp.mGameScene == GameScenes.SCENE_PLAYING) {
+                cn.enaium.fabricpvz.portable.lawn.Challenge aChallenge = aBoard.mChallenge;
+                if (stormyNight) {
+                    // 开启或新关卡：闪电状态机初始态 + 雨声（startLevel 同款）
+                    if (sStormBoard != aBoard) {
+                        aChallenge.mChallengeState =
+                                cn.enaium.fabricpvz.portable.lawn.ChallengeState.STATECHALLENGE_STORM_FLASH_1;
+                        aChallenge.mChallengeStateCounter = 400;
+                        sApp.playFoley(cn.enaium.fabricpvz.portable.pvzp.fx.FoleyType.FOLEY_RAIN);
+                        sStormBoard = aBoard;
+                    }
+                    aChallenge.updateStormyNight();
+                } else if (sStormBoard != null) {
+                    sStormBoard = null;
+                }
+                if (!aBoard.mPaused) {
+                    if (seedRain || stormyNight) {
+                        aChallenge.updateRain();
+                    }
+                    if (seedRain) {
+                        // 开启或新关卡：掉落定时器（initLevel 同款初值）
+                        if (sSeedRainBoard != aBoard) {
+                            aChallenge.mChallengeStateCounter = 100;
+                            if (!stormyNight) {
+                                sApp.playFoley(cn.enaium.fabricpvz.portable.pvzp.fx.FoleyType.FOLEY_RAIN);
+                            }
+                            sSeedRainBoard = aBoard;
+                        }
+                        aChallenge.updateRainingSeeds();
+                    }
+                    if (zombieSpeed) {
+                        aBoard.updateGame(); // 僵尸快跑：每帧双倍推进（SPEED 模式同款）
+                    }
+                    // 倍速滑块：正常 tick 之外额外推进 N-1 次（SPEED 模式同款机制），
+                    // 出怪/植物/僵尸/抛射物/阳光全部按倍数加速；拖动实时生效。
+                    // 传送带（滚动动画与新卡推入）走 Challenge.update 的独立驱动链，
+                    // 不在 updateGame 里——额外推进一次补齐（仅传送带关存在）
+                    for (int i = 1; i < sSpeedMult; i++) {
+                        aBoard.updateGame();
+                        if (aBoard.hasConveyorBeltSeedBank()) {
+                            aChallenge.updateConveyorBelt();
+                        }
+                    }
+                }
+                if (whackHammer) {
+                    // 开启或新关卡：锤子光标（startLevel 同款）
+                    if (sWhackBoard != aBoard) {
+                        setupWhackHammer(aBoard);
+                        sWhackBoard = aBoard;
+                    }
+                } else if (sWhackBoard != null) {
+                    if (sWhackBoard.mCursorObject.mCursorType
+                            == cn.enaium.fabricpvz.portable.lawn.CursorType.CURSOR_TYPE_HAMMER) {
+                        sWhackBoard.mCursorObject.mCursorType =
+                                cn.enaium.fabricpvz.portable.lawn.CursorType.CURSOR_TYPE_NORMAL;
+                        sApp.removeReanimation(sWhackBoard.mCursorObject.mReanimCursorID);
+                    }
+                    sWhackBoard = null;
+                }
             }
 
             // 拖动跟随：按住期间每帧吸附到指针（manager 的 public 全局鼠标坐标）
@@ -1191,6 +1621,11 @@ public final class TrainerMod implements ModInitializer {
         /** 场地页：行/列滑块（音量滑块同款）与种子/僵尸/物品选择钮、动作钮。 */
         private final Slider mRowSlider;
         private final Slider mColSlider;
+        /** 关卡页：倍速滑块（1-10 倍，实时生效）。 */
+        private final Slider mSpeedSlider;
+        private final Checkbox mNoSunDropsCheck;
+        private final Checkbox mNoCoinDropsCheck;
+        private final Checkbox mAnyPlantingCheck;
         private final LawnStoneButton mFieldSeedButton;
         private final LawnStoneButton mFieldPlantButton;
         private final LawnStoneButton mFieldZombieButton;
@@ -1200,8 +1635,11 @@ public final class TrainerMod implements ModInitializer {
         private final LawnStoneButton mFieldMusicButton;
         private final LawnStoneButton mFieldMusicApplyButton;
         private final LawnStoneButton mFieldClearGravesButton;
+        private final Checkbox mRemoveFogCheck;
+        private final Checkbox mVaseXrayCheck;
         /** 卡槽页：格数/卡槽/卡片选择与开关。 */
         private final LawnStoneButton mSlotCountButton;
+        private final LawnStoneButton mSetSunButton;
         private final Checkbox mHideSeedBankCheck;
         private final Checkbox mShowShovelCheck;
         private final Checkbox mNoCooldownCheck;
@@ -1225,15 +1663,46 @@ public final class TrainerMod implements ModInitializer {
         /** 特效按钮的标签，与 mEffectButtons 同序。 */
         private static final String[] EFFECT_NAMES =
                 {"SUKHBIR", "FUTURE", "MUSTACHE", "TRICKEDOUT", "DAISIES", "DANCE", "PINATA", "KONAMI"};
+        /** 特效页的 9 个关卡机制复刻开关（相互独立，种子雨与暴风雨共用计时器互斥）。 */
+        private final Checkbox mSeedRainCheck;
+        private final Checkbox mMiniZombieCheck;
+        private final Checkbox mColumnCheck;
+        private final Checkbox mZombieSpeedCheck;
+        private final Checkbox mWhackCheck;
+        private final Checkbox mNewtonCheck;
+        private final Checkbox mGraveDangerCheck;
+        private final Checkbox mStormyNightCheck;
+        private final Checkbox mBungeeBlitzCheck;
+        /** 僵尸页：15 个开关 + 吸怪列滑块 + 批量操作选择/修改。 */
+        private final Checkbox mZombieExplodeCheck;
+        private final Checkbox mZombieNeverExplodeCheck;
+        private final Checkbox mZombieNoChillCheck;
+        private final Checkbox mZombieNoButterCheck;
+        private final Checkbox mZombieHideCheck;
+        private final Checkbox mZombieShowCheck;
+        private final Checkbox mZombieNoDancersCheck;
+        private final Checkbox mZombieNoIceTrailCheck;
+        private final Checkbox mZombieInvincibleCheck;
+        private final Checkbox mZombieWeakCheck;
+        private final Checkbox mZombieNoImpThrowCheck;
+        private final Checkbox mZombieGargEdibleCheck;
+        private final Checkbox mZombieFrozenCheck;
+        private final Checkbox mZombieBossFrozenCheck;
+        private final Checkbox mZombieBalloonBoomCheck;
+        private final Checkbox mZombieVacuumCheck;
+        private final Slider mVacuumColSlider;
+        private final LawnStoneButton mZombieOpButton;
+        private final LawnStoneButton mZombieApplyButton;
         /** 复选框 → 条目文字（视口绘制与居中布局共用，覆盖所有标签页的复选框）。 */
         private final java.util.LinkedHashMap<Checkbox, String> mCheckboxLabels =
                 new java.util.LinkedHashMap<>();
         /** 两个标签页的名字与下拉按钮（对话框的固定子控件，不在滚动视口里）。 */
-        private static final String[] PAGE_NAMES = {"关 卡", "其 他", "用 户", "花 园",
-                "卡 槽", "植 物", "状 态", "特 效", "场 地"};
-        /** 状态页在 PAGE_NAMES 里的序号（纯展示页，没有控件）；场地页 = 8。 */
-        private static final int STATUS_TAB = 6;
-        private static final int FIELD_TAB = 8;
+        private static final String[] PAGE_NAMES = {"关 卡", "卡 槽", "植 物", "僵 尸",
+                "花 园", "场 地", "特 效", "状 态", "用 户", "其 他"};
+        /** 状态页在 PAGE_NAMES 里的序号（纯展示页，没有控件）；僵尸页 = 3；场地页 = 5。 */
+        private static final int STATUS_TAB = 7;
+        private static final int ZOMBIE_TAB = 3;
+        private static final int FIELD_TAB = 5;
         /** 状态页的展示行数。 */
         private static final int STATUS_ROW_COUNT = 12;
         private final LawnStoneButton mTabButton;
@@ -1301,6 +1770,20 @@ public final class TrainerMod implements ModInitializer {
                     g.drawString("列 " + sFieldCol,
                             Math.max(4, mColSlider.mX - 44),
                             mColSlider.mY + (mColSlider.mHeight - aFont.mHeight) / 2 + aFont.mAscent);
+                }
+                // 关卡页：倍速滑块的当前值（画在滑块左前方，垂直居中）
+                if (mCurrentTab == 0 && mSpeedSlider.mVisible) {
+                    g.setColor(new cn.enaium.fabricpvz.portable.sexy.Color(232, 218, 160));
+                    g.drawString("倍速 " + sSpeedMult,
+                            Math.max(4, mSpeedSlider.mX - 44),
+                            mSpeedSlider.mY + (mSpeedSlider.mHeight - aFont.mHeight) / 2 + aFont.mAscent);
+                }
+                // 僵尸页：吸怪目标列的当前值（画在滑块左前方，垂直居中）
+                if (mCurrentTab == ZOMBIE_TAB && mVacuumColSlider.mVisible) {
+                    g.setColor(new cn.enaium.fabricpvz.portable.sexy.Color(232, 218, 160));
+                    g.drawString("列 " + sVacuumCol,
+                            Math.max(4, mVacuumColSlider.mX - 44),
+                            mVacuumColSlider.mY + (mVacuumColSlider.mHeight - aFont.mHeight) / 2 + aFont.mAscent);
                 }
                 // 状态页：纯展示行（标签：值），随棋盘实时变化
                 if (mCurrentTab == STATUS_TAB) {
@@ -1377,6 +1860,41 @@ public final class TrainerMod implements ModInitializer {
             for (int i = 0; i < anEffectIds.length; i++) {
                 mEffectButtons[i] = GameButton.makeButton(anEffectIds[i], this, EFFECT_NAMES[i]);
             }
+            // 关卡机制复刻开关：初始勾选跟随各自开关状态（对话框重开时保持显示）
+            mSeedRainCheck = LawnCommon.makeNewCheckbox(ID_CHECK_MODE_SEED_RAIN, this, seedRain);
+            mMiniZombieCheck = LawnCommon.makeNewCheckbox(ID_CHECK_MODE_MINI_ZOMBIE, this, miniZombie);
+            mColumnCheck = LawnCommon.makeNewCheckbox(ID_CHECK_MODE_COLUMN, this, columnPlant);
+            mZombieSpeedCheck = LawnCommon.makeNewCheckbox(ID_CHECK_MODE_ZOMBIE_SPEED, this, zombieSpeed);
+            mWhackCheck = LawnCommon.makeNewCheckbox(ID_CHECK_MODE_WHACK, this, whackHammer);
+            mNewtonCheck = LawnCommon.makeNewCheckbox(ID_CHECK_MODE_NEWTON, this, newtonGravity);
+            mGraveDangerCheck = LawnCommon.makeNewCheckbox(ID_CHECK_MODE_GRAVE_DANGER, this, graveDanger);
+            mStormyNightCheck = LawnCommon.makeNewCheckbox(ID_CHECK_MODE_STORMY_NIGHT, this, stormyNight);
+            mBungeeBlitzCheck = LawnCommon.makeNewCheckbox(ID_CHECK_MODE_BUNGEE_BLITZ, this, bungeeBlitz);
+            mZombieExplodeCheck = LawnCommon.makeNewCheckbox(ID_CHECK_ZOMBIE_EXPLODE, this, zombieExplode);
+            mZombieNeverExplodeCheck = LawnCommon.makeNewCheckbox(ID_CHECK_ZOMBIE_NEVER_EXPLODE, this, zombieNeverExplode);
+            mZombieNoChillCheck = LawnCommon.makeNewCheckbox(ID_CHECK_ZOMBIE_NO_CHILL, this, zombieNoChill);
+            mZombieNoButterCheck = LawnCommon.makeNewCheckbox(ID_CHECK_ZOMBIE_NO_BUTTER, this, zombieNoButter);
+            mZombieHideCheck = LawnCommon.makeNewCheckbox(ID_CHECK_ZOMBIE_HIDE, this, zombieHide);
+            mZombieShowCheck = LawnCommon.makeNewCheckbox(ID_CHECK_ZOMBIE_SHOW, this, zombieShow);
+            mZombieNoDancersCheck = LawnCommon.makeNewCheckbox(ID_CHECK_ZOMBIE_NO_DANCERS, this, zombieNoDancers);
+            mZombieNoIceTrailCheck = LawnCommon.makeNewCheckbox(ID_CHECK_ZOMBIE_NO_ICE_TRAIL, this, zombieNoIceTrail);
+            mZombieInvincibleCheck = LawnCommon.makeNewCheckbox(ID_CHECK_ZOMBIE_INVINCIBLE, this, zombieInvincible);
+            mZombieWeakCheck = LawnCommon.makeNewCheckbox(ID_CHECK_ZOMBIE_WEAK, this, zombieWeak);
+            mZombieNoImpThrowCheck = LawnCommon.makeNewCheckbox(ID_CHECK_ZOMBIE_NO_IMP_THROW, this, zombieNoImpThrow);
+            mZombieGargEdibleCheck = LawnCommon.makeNewCheckbox(ID_CHECK_ZOMBIE_GARG_EDIBLE, this, zombieGargEdible);
+            mZombieFrozenCheck = LawnCommon.makeNewCheckbox(ID_CHECK_ZOMBIE_FROZEN, this, zombieFrozen);
+            mZombieBossFrozenCheck = LawnCommon.makeNewCheckbox(ID_CHECK_ZOMBIE_BOSS_FROZEN, this, zombieBossFrozen);
+            mZombieBalloonBoomCheck = LawnCommon.makeNewCheckbox(ID_CHECK_ZOMBIE_BALLOON_BOOM, this, zombieBalloonBoom);
+            mZombieVacuumCheck = LawnCommon.makeNewCheckbox(ID_CHECK_ZOMBIE_VACUUM, this, zombieVacuum);
+            mVacuumColSlider = new Slider(
+                    cn.enaium.fabricpvz.portable.lawn.Resources
+                            .getImageById(cn.enaium.fabricpvz.portable.lawn.Resources.IMAGE_OPTIONS_SLIDERSLOT_ID),
+                    cn.enaium.fabricpvz.portable.lawn.Resources
+                            .getImageById(cn.enaium.fabricpvz.portable.lawn.Resources.IMAGE_OPTIONS_SLIDERKNOB2_ID),
+                    ID_ZOMBIE_VACUUM_COL, this);
+            mVacuumColSlider.setValue((sVacuumCol - 1) / 8.0);
+            mZombieOpButton = GameButton.makeButton(ID_ZOMBIE_OP, this, "所有僵尸：" + ZOMBIE_OP_NAMES[sZombieOpIndex]);
+            mZombieApplyButton = GameButton.makeButton(ID_ZOMBIE_APPLY, this, "修 改");
             mTreeHeightButton = GameButton.makeButton(ID_TREE_HEIGHT, this, "设置智慧树高度");
             mAddSproutButton = GameButton.makeButton(ID_ADD_SPROUT, this, "新增一颗随机幼苗");
             mAddMarigoldButton = GameButton.makeButton(ID_ADD_MARIGOLD, this, "新增金盏花幼苗");
@@ -1388,6 +1906,16 @@ public final class TrainerMod implements ModInitializer {
                             .getImageById(cn.enaium.fabricpvz.portable.lawn.Resources.IMAGE_OPTIONS_SLIDERKNOB2_ID),
                     ID_FIELD_ROW, this);
             mRowSlider.setValue((sFieldRow - 1) / 5.0);
+            mNoSunDropsCheck = LawnCommon.makeNewCheckbox(ID_CHECK_NO_SUN_DROPS, this, noSunDrops);
+            mNoCoinDropsCheck = LawnCommon.makeNewCheckbox(ID_CHECK_NO_COIN_DROPS, this, noCoinDrops);
+            mAnyPlantingCheck = LawnCommon.makeNewCheckbox(ID_CHECK_ANY_PLANTING, this, anyPlanting);
+            mSpeedSlider = new Slider(
+                    cn.enaium.fabricpvz.portable.lawn.Resources
+                            .getImageById(cn.enaium.fabricpvz.portable.lawn.Resources.IMAGE_OPTIONS_SLIDERSLOT_ID),
+                    cn.enaium.fabricpvz.portable.lawn.Resources
+                            .getImageById(cn.enaium.fabricpvz.portable.lawn.Resources.IMAGE_OPTIONS_SLIDERKNOB2_ID),
+                    ID_FIELD_SPEED, this);
+            mSpeedSlider.setValue((sSpeedMult - 1) / 9.0);
             mColSlider = new Slider(
                     cn.enaium.fabricpvz.portable.lawn.Resources
                             .getImageById(cn.enaium.fabricpvz.portable.lawn.Resources.IMAGE_OPTIONS_SLIDERSLOT_ID),
@@ -1406,17 +1934,23 @@ public final class TrainerMod implements ModInitializer {
             mFieldMusicButton = GameButton.makeButton(ID_FIELD_MUSIC, this, "音乐：Grasswalk");
             mFieldMusicApplyButton = GameButton.makeButton(ID_FIELD_MUSIC_APPLY, this, "修改音乐");
             mFieldClearGravesButton = GameButton.makeButton(ID_FIELD_CLEAR_GRAVES, this, "清空墓碑");
+            mRemoveFogCheck = LawnCommon.makeNewCheckbox(ID_CHECK_REMOVE_FOG, this, removeFog);
+            mVaseXrayCheck = LawnCommon.makeNewCheckbox(ID_CHECK_VASE_XRAY, this, vaseXray);
             // 复选框条目文字集中登记（视口绘制与居中布局共用）
             mCheckboxLabels.put(mSunCheck, "无限阳光");
             mCheckboxLabels.put(mPlantCheck, "免费种植");
             mCheckboxLabels.put(mCollectCheck, "自动收集");
             mCheckboxLabels.put(mPauseCheck, "暂停出怪");
+            mCheckboxLabels.put(mNoSunDropsCheck, "不掉阳光");
+            mCheckboxLabels.put(mNoCoinDropsCheck, "不掉金币");
+            mCheckboxLabels.put(mAnyPlantingCheck, "任意种植");
             mCheckboxLabels.put(mInfiniteCoinsCheck, "无限金币");
             mCheckboxLabels.put(mInfiniteFertilizerCheck, "无限花肥");
             mCheckboxLabels.put(mInfiniteBugSprayCheck, "无限杀虫剂");
             mCheckboxLabels.put(mInfiniteChocolateCheck, "无限巧克力");
             mCheckboxLabels.put(mInfiniteTreeFoodCheck, "无限树肥");
             mSlotCountButton = GameButton.makeButton(ID_SLOT_COUNT, this, "卡槽格数：10");
+            mSetSunButton = GameButton.makeButton(ID_SET_SUN, this, "设置阳光");
             mHideSeedBankCheck = LawnCommon.makeNewCheckbox(ID_CHECK_HIDE_SEEDBANK, this, false);
             mShowShovelCheck = LawnCommon.makeNewCheckbox(ID_CHECK_SHOW_SHOVEL, this, false);
             mNoCooldownCheck = LawnCommon.makeNewCheckbox(ID_CHECK_NO_COOLDOWN, this, noCooldown);
@@ -1436,6 +1970,42 @@ public final class TrainerMod implements ModInitializer {
             mCheckboxLabels.put(mShowShovelCheck, "显示铲子");
             mCheckboxLabels.put(mNoCooldownCheck, "卡片无冷却");
             mCheckboxLabels.put(mHideMenuButtonCheck, "隐藏菜单按钮");
+            mCheckboxLabels.put(mRemoveFogCheck, "去除浓雾");
+            mCheckboxLabels.put(mVaseXrayCheck, "花瓶透视");
+            mCheckboxLabels.put(mSeedRainCheck, challengeName(
+                    cn.enaium.fabricpvz.portable.lawn.GameMode.GAMEMODE_CHALLENGE_RAINING_SEEDS));
+            mCheckboxLabels.put(mMiniZombieCheck, challengeName(
+                    cn.enaium.fabricpvz.portable.lawn.GameMode.GAMEMODE_CHALLENGE_LITTLE_TROUBLE));
+            mCheckboxLabels.put(mColumnCheck, challengeName(
+                    cn.enaium.fabricpvz.portable.lawn.GameMode.GAMEMODE_CHALLENGE_COLUMN));
+            mCheckboxLabels.put(mZombieSpeedCheck, challengeName(
+                    cn.enaium.fabricpvz.portable.lawn.GameMode.GAMEMODE_CHALLENGE_SPEED));
+            mCheckboxLabels.put(mWhackCheck, challengeName(
+                    cn.enaium.fabricpvz.portable.lawn.GameMode.GAMEMODE_CHALLENGE_WHACK_A_ZOMBIE));
+            mCheckboxLabels.put(mNewtonCheck, challengeName(
+                    cn.enaium.fabricpvz.portable.lawn.GameMode.GAMEMODE_CHALLENGE_HIGH_GRAVITY));
+            mCheckboxLabels.put(mGraveDangerCheck, challengeName(
+                    cn.enaium.fabricpvz.portable.lawn.GameMode.GAMEMODE_CHALLENGE_GRAVE_DANGER));
+            mCheckboxLabels.put(mStormyNightCheck, challengeName(
+                    cn.enaium.fabricpvz.portable.lawn.GameMode.GAMEMODE_CHALLENGE_STORMY_NIGHT));
+            mCheckboxLabels.put(mBungeeBlitzCheck, challengeName(
+                    cn.enaium.fabricpvz.portable.lawn.GameMode.GAMEMODE_CHALLENGE_BUNGEE_BLITZ));
+            mCheckboxLabels.put(mZombieExplodeCheck, "立即爆炸");
+            mCheckboxLabels.put(mZombieNeverExplodeCheck, "从不爆炸");
+            mCheckboxLabels.put(mZombieNoChillCheck, "取消寒冰减速");
+            mCheckboxLabels.put(mZombieNoButterCheck, "取消黄油固定");
+            mCheckboxLabels.put(mZombieHideCheck, "僵尸隐形");
+            mCheckboxLabels.put(mZombieShowCheck, "僵尸现形");
+            mCheckboxLabels.put(mZombieNoDancersCheck, "取消泳池三人组");
+            mCheckboxLabels.put(mZombieNoIceTrailCheck, "不留冰道");
+            mCheckboxLabels.put(mZombieInvincibleCheck, "僵尸无敌");
+            mCheckboxLabels.put(mZombieWeakCheck, "僵尸脆弱");
+            mCheckboxLabels.put(mZombieNoImpThrowCheck, "不扔小鬼");
+            mCheckboxLabels.put(mZombieGargEdibleCheck, "巨人可被吃");
+            mCheckboxLabels.put(mZombieFrozenCheck, "僵尸不动");
+            mCheckboxLabels.put(mZombieBossFrozenCheck, "僵王不动");
+            mCheckboxLabels.put(mZombieBalloonBoomCheck, "气球自爆");
+            mCheckboxLabels.put(mZombieVacuumCheck, "吸怪");
             mCobNoCdCheck = LawnCommon.makeNewCheckbox(ID_CHECK_COB_NO_CD, this, cobNoCooldown);
             mMagnetNoCdCheck = LawnCommon.makeNewCheckbox(ID_CHECK_MAGNET_NO_CD, this, magnetNoCooldown);
             mPotatoNoCdCheck = LawnCommon.makeNewCheckbox(ID_CHECK_POTATO_NO_CD, this, potatoNoCooldown);
@@ -1468,6 +2038,7 @@ public final class TrainerMod implements ModInitializer {
             }
             mRowSlider.resize(0, 0, 150, 34);
             mColSlider.resize(0, 0, 150, 34);
+            mSpeedSlider.resize(0, 0, 150, 34);
             mHideSeedBankCheck.resize(0, 0, CHECKBOX_WIDTH, CHECKBOX_HEIGHT);
             mShowShovelCheck.resize(0, 0, CHECKBOX_WIDTH, CHECKBOX_HEIGHT);
             mNoCooldownCheck.resize(0, 0, CHECKBOX_WIDTH, CHECKBOX_HEIGHT);
@@ -1480,6 +2051,34 @@ public final class TrainerMod implements ModInitializer {
             mPlantFragileCheck.resize(0, 0, CHECKBOX_WIDTH, CHECKBOX_HEIGHT);
             mNoCraterCheck.resize(0, 0, CHECKBOX_WIDTH, CHECKBOX_HEIGHT);
             mMushroomAwakeCheck.resize(0, 0, CHECKBOX_WIDTH, CHECKBOX_HEIGHT);
+            mRemoveFogCheck.resize(0, 0, CHECKBOX_WIDTH, CHECKBOX_HEIGHT);
+            mVaseXrayCheck.resize(0, 0, CHECKBOX_WIDTH, CHECKBOX_HEIGHT);
+            mSeedRainCheck.resize(0, 0, CHECKBOX_WIDTH, CHECKBOX_HEIGHT);
+            mMiniZombieCheck.resize(0, 0, CHECKBOX_WIDTH, CHECKBOX_HEIGHT);
+            mColumnCheck.resize(0, 0, CHECKBOX_WIDTH, CHECKBOX_HEIGHT);
+            mZombieSpeedCheck.resize(0, 0, CHECKBOX_WIDTH, CHECKBOX_HEIGHT);
+            mWhackCheck.resize(0, 0, CHECKBOX_WIDTH, CHECKBOX_HEIGHT);
+            mNewtonCheck.resize(0, 0, CHECKBOX_WIDTH, CHECKBOX_HEIGHT);
+            mGraveDangerCheck.resize(0, 0, CHECKBOX_WIDTH, CHECKBOX_HEIGHT);
+            mStormyNightCheck.resize(0, 0, CHECKBOX_WIDTH, CHECKBOX_HEIGHT);
+            mBungeeBlitzCheck.resize(0, 0, CHECKBOX_WIDTH, CHECKBOX_HEIGHT);
+            mZombieExplodeCheck.resize(0, 0, CHECKBOX_WIDTH, CHECKBOX_HEIGHT);
+            mZombieNeverExplodeCheck.resize(0, 0, CHECKBOX_WIDTH, CHECKBOX_HEIGHT);
+            mZombieNoChillCheck.resize(0, 0, CHECKBOX_WIDTH, CHECKBOX_HEIGHT);
+            mZombieNoButterCheck.resize(0, 0, CHECKBOX_WIDTH, CHECKBOX_HEIGHT);
+            mZombieHideCheck.resize(0, 0, CHECKBOX_WIDTH, CHECKBOX_HEIGHT);
+            mZombieShowCheck.resize(0, 0, CHECKBOX_WIDTH, CHECKBOX_HEIGHT);
+            mZombieNoDancersCheck.resize(0, 0, CHECKBOX_WIDTH, CHECKBOX_HEIGHT);
+            mZombieNoIceTrailCheck.resize(0, 0, CHECKBOX_WIDTH, CHECKBOX_HEIGHT);
+            mZombieInvincibleCheck.resize(0, 0, CHECKBOX_WIDTH, CHECKBOX_HEIGHT);
+            mZombieWeakCheck.resize(0, 0, CHECKBOX_WIDTH, CHECKBOX_HEIGHT);
+            mZombieNoImpThrowCheck.resize(0, 0, CHECKBOX_WIDTH, CHECKBOX_HEIGHT);
+            mZombieGargEdibleCheck.resize(0, 0, CHECKBOX_WIDTH, CHECKBOX_HEIGHT);
+            mZombieFrozenCheck.resize(0, 0, CHECKBOX_WIDTH, CHECKBOX_HEIGHT);
+            mZombieBossFrozenCheck.resize(0, 0, CHECKBOX_WIDTH, CHECKBOX_HEIGHT);
+            mZombieBalloonBoomCheck.resize(0, 0, CHECKBOX_WIDTH, CHECKBOX_HEIGHT);
+            mZombieVacuumCheck.resize(0, 0, CHECKBOX_WIDTH, CHECKBOX_HEIGHT);
+            mVacuumColSlider.resize(0, 0, 150, 34);
             mTabButton = new LawnStoneButton(null, ID_TAB, this) {
                 {
                     // 打开时恢复上次会话记住的标签页名（mCurrentTab 已是构造恢复值）
@@ -1521,30 +2120,83 @@ public final class TrainerMod implements ModInitializer {
                     g.drawString(mLabel, aFontX, aFontY);
                 }
             };
-            mTabPages.add(java.util.List.of(mPlantCheck, mCollectCheck, mPauseCheck,
-                    mNextWaveButton, mAdvanceButton, mWinLevelButton));
-            mTabPages.add(java.util.List.of(mKillButton, mKillPlantsButton, mClearMowersButton,
-                    mRestoreMowersButton, mStartMowersButton, mSkipLevelButton));
-            mTabPages.add(java.util.List.of(mUnlockSunflowerButton, mTmpUnlockButton,
-                    mInfiniteCoinsCheck, mSetCoinsButton));
-            mTabPages.add(java.util.List.of(mInfiniteFertilizerCheck, mInfiniteBugSprayCheck,
-                    mInfiniteChocolateCheck, mInfiniteTreeFoodCheck, mTreeHeightButton,
-                    mAddSproutButton, mAddMarigoldButton, mAddBigPlantButton));
-            mTabPages.add(java.util.List.of(mSunCheck, mSlotCountButton, mHideSeedBankCheck,
-                    mShowShovelCheck, mNoCooldownCheck, mHideMenuButtonCheck, mSlotPickButton,
-                    mSlotSeedButton, mSlotApplyButton,
-                    mCardPickButton, mCardAttackButton, mCardPriceButton, mCardCooldownButton)); // 卡槽页
-            mTabPages.add(java.util.List.of(mCobNoCdCheck, mMagnetNoCdCheck, mPotatoNoCdCheck,
-                    mChomperNoCdCheck, mPlantInvincibleCheck, mPlantFragileCheck, mNoCraterCheck,
-                    mMushroomAwakeCheck)); // 植物页
+            // 页序：关卡、卡槽、植物、僵尸、花园、场地、特效、状态、用户、其他。
+            // 各页条目规则：滑块最前 → 勾选框 → 组合项（滑块/成对石钮组）→ 孤立石钮；
+            // 同类之间按条目字数升序（稳定排序，同长保持定义序）
+            mTabPages.add(java.util.List.of(mSpeedSlider,
+                    mPlantCheck, mCollectCheck, mPauseCheck, mNoSunDropsCheck, mNoCoinDropsCheck,
+                    mAnyPlantingCheck,
+                    mWinLevelButton, mAdvanceButton, mNextWaveButton));
+            mTabPages.add(java.util.List.of(mSunCheck, mHideSeedBankCheck, mShowShovelCheck,
+                    mNoCooldownCheck, mHideMenuButtonCheck,
+                    mSlotPickButton, mSlotSeedButton, mSlotApplyButton,
+                    mCardPickButton, mCardAttackButton, mCardPriceButton, mCardCooldownButton,
+                    mSetSunButton, mSlotCountButton)); // 卡槽页
+            java.util.List<Widget> aPlantItems = new java.util.ArrayList<>(java.util.List.of(
+                    mPlantInvincibleCheck, mPlantFragileCheck, mNoCraterCheck, mMushroomAwakeCheck,
+                    mCobNoCdCheck, mMagnetNoCdCheck, mPotatoNoCdCheck, mChomperNoCdCheck));
+            aPlantItems.sort(java.util.Comparator.comparingInt(
+                    aWidget -> mCheckboxLabels.get(aWidget).length()));
+            mTabPages.add(aPlantItems); // 植物页
+            java.util.List<Widget> aZombieItems = new java.util.ArrayList<>(java.util.List.of(
+                    mZombieExplodeCheck, mZombieNeverExplodeCheck, mZombieHideCheck, mZombieShowCheck,
+                    mZombieNoIceTrailCheck, mZombieInvincibleCheck, mZombieWeakCheck,
+                    mZombieNoImpThrowCheck, mZombieFrozenCheck, mZombieBossFrozenCheck,
+                    mZombieBalloonBoomCheck, mZombieGargEdibleCheck, mZombieNoChillCheck,
+                    mZombieNoButterCheck, mZombieNoDancersCheck));
+            aZombieItems.sort(java.util.Comparator.comparingInt(
+                    aWidget -> mCheckboxLabels.get(aWidget).length()));
+            aZombieItems.add(mZombieVacuumCheck);
+            aZombieItems.add(mVacuumColSlider);
+            aZombieItems.add(mZombieOpButton);
+            aZombieItems.add(mZombieApplyButton);
+            mTabPages.add(aZombieItems); // 僵尸页
+            java.util.List<Widget> aGardenItems = new java.util.ArrayList<>(java.util.List.of(
+                    mInfiniteFertilizerCheck, mInfiniteTreeFoodCheck, mInfiniteBugSprayCheck,
+                    mInfiniteChocolateCheck));
+            aGardenItems.sort(java.util.Comparator.comparingInt(
+                    aWidget -> mCheckboxLabels.get(aWidget).length()));
+            aGardenItems.add(mTreeHeightButton);
+            aGardenItems.add(mAddMarigoldButton);
+            aGardenItems.add(mAddSproutButton);
+            aGardenItems.add(mAddBigPlantButton);
+            mTabPages.add(aGardenItems); // 花园页
+            mTabPages.add(java.util.List.of(mRemoveFogCheck, mVaseXrayCheck,
+                    mRowSlider, mColSlider,
+                    mFieldSeedButton, mFieldPlantButton,
+                    mFieldZombieButton, mFieldZombiePlaceButton,
+                    mFieldItemButton, mFieldItemPlaceButton,
+                    mFieldMusicButton, mFieldMusicApplyButton,
+                    mFieldClearGravesButton)); // 场地页：浓雾/透视在前，行列滑块紧贴种植组合
+            java.util.List<Widget> anEffectChecks = new java.util.ArrayList<>(java.util.List.of(
+                    mSeedRainCheck, mMiniZombieCheck, mColumnCheck, mZombieSpeedCheck, mWhackCheck,
+                    mNewtonCheck, mGraveDangerCheck, mStormyNightCheck, mBungeeBlitzCheck));
+            anEffectChecks.sort(java.util.Comparator.comparingInt(
+                    aWidget -> mCheckboxLabels.get(aWidget).length()));
+            java.util.List<Widget> anEffectButtons = new java.util.ArrayList<>();
+            for (LawnStoneButton anEffectButton : mEffectButtons) {
+                anEffectButtons.add(anEffectButton);
+            }
+            anEffectButtons.sort(java.util.Comparator.comparingInt(
+                    aWidget -> ((LawnStoneButton) aWidget).mLabel.length()));
+            java.util.List<Widget> anEffectItems = new java.util.ArrayList<>(anEffectChecks);
+            anEffectItems.addAll(anEffectButtons);
+            mTabPages.add(anEffectItems); // 特效页：勾选框在前（按本地化名长度），石钮在后（按英文名长度）
             mTabPages.add(java.util.List.of()); // 状态页：纯展示，无控件
-            mTabPages.add(java.util.List.of(mEffectButtons[0], mEffectButtons[1], mEffectButtons[2],
-                    mEffectButtons[3], mEffectButtons[4], mEffectButtons[5], mEffectButtons[6],
-                    mEffectButtons[7])); // 特效页
-            mTabPages.add(java.util.List.of(mRowSlider, mColSlider, mFieldSeedButton,
-                    mFieldPlantButton, mFieldZombieButton, mFieldZombiePlaceButton,
-                    mFieldItemButton, mFieldItemPlaceButton, mFieldMusicButton, mFieldMusicApplyButton,
-                    mFieldClearGravesButton)); // 场地页
+            java.util.List<Widget> anUserItems = new java.util.ArrayList<>();
+            anUserItems.add(mInfiniteCoinsCheck);
+            java.util.List<Widget> anUserButtons = new java.util.ArrayList<>(java.util.List.of(
+                    mSetCoinsButton, mUnlockSunflowerButton, mTmpUnlockButton));
+            anUserButtons.sort(java.util.Comparator.comparingInt(
+                    aWidget -> ((LawnStoneButton) aWidget).mLabel.length()));
+            anUserItems.addAll(anUserButtons);
+            mTabPages.add(anUserItems); // 用户页
+            java.util.List<Widget> aMiscItems = new java.util.ArrayList<>(java.util.List.of(
+                    mKillButton, mKillPlantsButton, mClearMowersButton, mRestoreMowersButton,
+                    mStartMowersButton, mSkipLevelButton));
+            aMiscItems.sort(java.util.Comparator.comparingInt(
+                    aWidget -> ((LawnStoneButton) aWidget).mLabel.length()));
+            mTabPages.add(aMiscItems); // 其他页
 
             // 固定高度（标签行 + 约四行内容）；内容更高，出滚动条滑动。
             // 标签行虽抬到标题下（省 40px），但行高+间距仍把视口顶推下一段，高度补回
@@ -2118,6 +2770,11 @@ public final class TrainerMod implements ModInitializer {
                 }
                 resize(0, 0, Math.max(90, aNameWidth + 34),
                         Math.min(theItems.length, MAX_VISIBLE_ROWS) * ROW_HEIGHT);
+                // 展开即自动定位：滚动到当前选中行（尽量居中），钳制进滚动范围；
+                // 选中项超出视口时不再从顶部开始翻找
+                int aVisibleRows = Math.max(1, mHeight / ROW_HEIGHT);
+                mScrollOffset = Math.max(0, Math.min(theSelectedIndex - (aVisibleRows - 1) / 2,
+                        mItems.length - aVisibleRows));
             }
 
             private int maxScroll() {
@@ -2137,7 +2794,11 @@ public final class TrainerMod implements ModInitializer {
                 for (int i = 0; i < aVisible && i + mScrollOffset < mItems.length; i++) {
                     int anIndex = i + mScrollOffset;
                     int aRowY = i * ROW_HEIGHT;
-                    if (anIndex == mHoverRow) {
+                    if (anIndex == mSelectedIndex) {
+                        // 选中行常驻高亮带（比悬停更醒目），与亮色文字配套
+                        g.setColor(new cn.enaium.fabricpvz.portable.sexy.Color(255, 200, 70, 120));
+                        g.fillRect(2, aRowY + 1, mWidth - 4, ROW_HEIGHT - 2);
+                    } else if (anIndex == mHoverRow) {
                         g.setColor(new cn.enaium.fabricpvz.portable.sexy.Color(255, 220, 80, 60));
                         g.fillRect(2, aRowY + 1, mWidth - 4, ROW_HEIGHT - 2);
                     }
@@ -2201,6 +2862,10 @@ public final class TrainerMod implements ModInitializer {
                 sFieldRow = 1 + (int) Math.round(theVal * 5);
             } else if (theId == ID_FIELD_COL) {
                 sFieldCol = 1 + (int) Math.round(theVal * 8);
+            } else if (theId == ID_FIELD_SPEED) {
+                sSpeedMult = 1 + (int) Math.round(theVal * 9); // 1..10 倍，拖动实时生效
+            } else if (theId == ID_ZOMBIE_VACUUM_COL) {
+                sVacuumCol = 1 + (int) Math.round(theVal * 8); // 吸怪目标列 1..9
             }
             markDirty();
         }
@@ -2331,6 +2996,24 @@ public final class TrainerMod implements ModInitializer {
             }
             if (theId == ID_FIELD_CLEAR_GRAVES && sBoard != null) {
                 clearGraveStones();
+                return;
+            }
+            if (theId == ID_SET_SUN && sBoard != null
+                    && sApp.getDialog(TRAINER_SUN_DIALOG_ID) == null) {
+                sApp.addDialog(TRAINER_SUN_DIALOG_ID, new NumberInputDialog(TRAINER_SUN_DIALOG_ID,
+                        "设置阳光", "请输入阳光数量：", 4, TrainerMod::setSun));
+                return;
+            }
+            if (theId == ID_ZOMBIE_OP) {
+                openFieldPopup(ZOMBIE_OP_NAMES, sZombieOpIndex, aIndex -> {
+                    sZombieOpIndex = aIndex;
+                    mZombieOpButton.setLabel("所有僵尸：" + ZOMBIE_OP_NAMES[aIndex]);
+                }, mZombieOpButton);
+                return;
+            }
+            if (theId == ID_ZOMBIE_APPLY && sBoard != null) {
+                int aCount = applyZombieOperation(sBoard, sZombieOpIndex);
+                show(sBoard, "对所有僵尸执行 " + ZOMBIE_OP_NAMES[sZombieOpIndex] + " ×" + aCount);
                 return;
             }
             if (theId == ID_SLOT_COUNT && sBoard != null) {
@@ -2546,6 +3229,18 @@ public final class TrainerMod implements ModInitializer {
                     pauseSpawning = theChecked;
                     show(sBoard, "暂停出怪：" + onOff(theChecked));
                 }
+                case ID_CHECK_NO_SUN_DROPS -> {
+                    noSunDrops = theChecked;
+                    show(sBoard, "不掉阳光：" + onOff(theChecked));
+                }
+                case ID_CHECK_NO_COIN_DROPS -> {
+                    noCoinDrops = theChecked;
+                    show(sBoard, "不掉金币：" + onOff(theChecked));
+                }
+                case ID_CHECK_ANY_PLANTING -> {
+                    anyPlanting = theChecked;
+                    show(sBoard, "任意种植：" + onOff(theChecked));
+                }
                 case ID_CHECK_INFINITE_COINS -> {
                     infiniteCoins = theChecked;
                     show(sBoard, "无限金币：" + onOff(theChecked));
@@ -2601,6 +3296,155 @@ public final class TrainerMod implements ModInitializer {
                 case ID_CHECK_MUSHROOM_AWAKE -> {
                     mushroomAwake = theChecked;
                     show(sBoard, "蘑菇免唤醒：" + onOff(theChecked));
+                }
+                case ID_CHECK_REMOVE_FOG -> {
+                    removeFog = theChecked;
+                    show(sBoard, "去除浓雾：" + onOff(theChecked));
+                }
+                case ID_CHECK_VASE_XRAY -> {
+                    vaseXray = theChecked;
+                    show(sBoard, "花瓶透视：" + onOff(theChecked));
+                }
+                case ID_CHECK_MODE_SEED_RAIN -> {
+                    seedRain = theChecked;
+                    if (theChecked && stormyNight) { // 二者共用 Challenge.mChallengeStateCounter
+                        stormyNight = false;
+                        mStormyNightCheck.mChecked = false;
+                        sStormBoard = null;
+                    }
+                    if (!theChecked && !stormyNight && sBoard != null) {
+                        sApp.mSoundSystem.stopFoley(cn.enaium.fabricpvz.portable.pvzp.fx.FoleyType.FOLEY_RAIN);
+                    }
+                    show(sBoard, challengeName(cn.enaium.fabricpvz.portable.lawn.GameMode.GAMEMODE_CHALLENGE_RAINING_SEEDS)
+                            + "：" + onOff(theChecked));
+                }
+                case ID_CHECK_MODE_MINI_ZOMBIE -> {
+                    miniZombie = theChecked;
+                    show(sBoard, challengeName(cn.enaium.fabricpvz.portable.lawn.GameMode.GAMEMODE_CHALLENGE_LITTLE_TROUBLE)
+                            + "：" + onOff(theChecked));
+                }
+                case ID_CHECK_MODE_COLUMN -> {
+                    columnPlant = theChecked;
+                    show(sBoard, challengeName(cn.enaium.fabricpvz.portable.lawn.GameMode.GAMEMODE_CHALLENGE_COLUMN)
+                            + "：" + onOff(theChecked));
+                }
+                case ID_CHECK_MODE_ZOMBIE_SPEED -> {
+                    zombieSpeed = theChecked;
+                    show(sBoard, challengeName(cn.enaium.fabricpvz.portable.lawn.GameMode.GAMEMODE_CHALLENGE_SPEED)
+                            + "：" + onOff(theChecked));
+                }
+                case ID_CHECK_MODE_WHACK -> {
+                    whackHammer = theChecked;
+                    show(sBoard, challengeName(cn.enaium.fabricpvz.portable.lawn.GameMode.GAMEMODE_CHALLENGE_WHACK_A_ZOMBIE)
+                            + "：" + onOff(theChecked));
+                }
+                case ID_CHECK_MODE_NEWTON -> {
+                    newtonGravity = theChecked;
+                    show(sBoard, challengeName(cn.enaium.fabricpvz.portable.lawn.GameMode.GAMEMODE_CHALLENGE_HIGH_GRAVITY)
+                            + "：" + onOff(theChecked));
+                }
+                case ID_CHECK_MODE_GRAVE_DANGER -> {
+                    graveDanger = theChecked;
+                    show(sBoard, challengeName(cn.enaium.fabricpvz.portable.lawn.GameMode.GAMEMODE_CHALLENGE_GRAVE_DANGER)
+                            + "：" + onOff(theChecked));
+                }
+                case ID_CHECK_MODE_STORMY_NIGHT -> {
+                    stormyNight = theChecked;
+                    if (theChecked && seedRain) { // 二者共用 Challenge.mChallengeStateCounter
+                        seedRain = false;
+                        mSeedRainCheck.mChecked = false;
+                        sSeedRainBoard = null;
+                    }
+                    if (!theChecked && !seedRain && sBoard != null) {
+                        sApp.mSoundSystem.stopFoley(cn.enaium.fabricpvz.portable.pvzp.fx.FoleyType.FOLEY_RAIN);
+                    }
+                    show(sBoard, challengeName(cn.enaium.fabricpvz.portable.lawn.GameMode.GAMEMODE_CHALLENGE_STORMY_NIGHT)
+                            + "：" + onOff(theChecked));
+                }
+                case ID_CHECK_MODE_BUNGEE_BLITZ -> {
+                    bungeeBlitz = theChecked;
+                    show(sBoard, challengeName(cn.enaium.fabricpvz.portable.lawn.GameMode.GAMEMODE_CHALLENGE_BUNGEE_BLITZ)
+                            + "：" + onOff(theChecked));
+                }
+                case ID_CHECK_ZOMBIE_EXPLODE -> {
+                    zombieExplode = theChecked;
+                    if (zombieExplode && zombieNeverExplode) { // 爆与不爆互斥
+                        zombieNeverExplode = false;
+                        mZombieNeverExplodeCheck.mChecked = false;
+                    }
+                    show(sBoard, "立即爆炸：" + onOff(theChecked));
+                }
+                case ID_CHECK_ZOMBIE_NEVER_EXPLODE -> {
+                    zombieNeverExplode = theChecked;
+                    if (zombieNeverExplode && zombieExplode) {
+                        zombieExplode = false;
+                        mZombieExplodeCheck.mChecked = false;
+                    }
+                    show(sBoard, "从不爆炸：" + onOff(theChecked));
+                }
+                case ID_CHECK_ZOMBIE_NO_CHILL -> {
+                    zombieNoChill = theChecked;
+                    show(sBoard, "取消寒冰减速：" + onOff(theChecked));
+                }
+                case ID_CHECK_ZOMBIE_NO_BUTTER -> {
+                    zombieNoButter = theChecked;
+                    show(sBoard, "取消黄油固定：" + onOff(theChecked));
+                }
+                case ID_CHECK_ZOMBIE_HIDE -> {
+                    zombieHide = theChecked;
+                    show(sBoard, "僵尸隐形：" + onOff(theChecked));
+                }
+                case ID_CHECK_ZOMBIE_SHOW -> {
+                    zombieShow = theChecked;
+                    show(sBoard, "僵尸现形：" + onOff(theChecked));
+                }
+                case ID_CHECK_ZOMBIE_NO_DANCERS -> {
+                    zombieNoDancers = theChecked;
+                    show(sBoard, "取消泳池三人组：" + onOff(theChecked));
+                }
+                case ID_CHECK_ZOMBIE_NO_ICE_TRAIL -> {
+                    zombieNoIceTrail = theChecked;
+                    show(sBoard, "不留冰道：" + onOff(theChecked));
+                }
+                case ID_CHECK_ZOMBIE_INVINCIBLE -> {
+                    zombieInvincible = theChecked;
+                    if (zombieInvincible && zombieWeak) { // 无敌与虚弱互斥
+                        zombieWeak = false;
+                        mZombieWeakCheck.mChecked = false;
+                    }
+                    show(sBoard, "僵尸无敌：" + onOff(theChecked));
+                }
+                case ID_CHECK_ZOMBIE_WEAK -> {
+                    zombieWeak = theChecked;
+                    if (zombieWeak && zombieInvincible) {
+                        zombieInvincible = false;
+                        mZombieInvincibleCheck.mChecked = false;
+                    }
+                    show(sBoard, "僵尸脆弱：" + onOff(theChecked));
+                }
+                case ID_CHECK_ZOMBIE_NO_IMP_THROW -> {
+                    zombieNoImpThrow = theChecked;
+                    show(sBoard, "不扔小鬼：" + onOff(theChecked));
+                }
+                case ID_CHECK_ZOMBIE_GARG_EDIBLE -> {
+                    zombieGargEdible = theChecked;
+                    show(sBoard, "巨人可被吃：" + onOff(theChecked));
+                }
+                case ID_CHECK_ZOMBIE_FROZEN -> {
+                    zombieFrozen = theChecked;
+                    show(sBoard, "僵尸不动：" + onOff(theChecked));
+                }
+                case ID_CHECK_ZOMBIE_BOSS_FROZEN -> {
+                    zombieBossFrozen = theChecked;
+                    show(sBoard, "僵王不动：" + onOff(theChecked));
+                }
+                case ID_CHECK_ZOMBIE_BALLOON_BOOM -> {
+                    zombieBalloonBoom = theChecked;
+                    show(sBoard, "气球自爆：" + onOff(theChecked));
+                }
+                case ID_CHECK_ZOMBIE_VACUUM -> {
+                    zombieVacuum = theChecked;
+                    show(sBoard, "吸怪：" + onOff(theChecked) + "（目标列 " + sVacuumCol + "）");
                 }
                 case ID_CHECK_HIDE_SEEDBANK -> {
                     if (sBoard != null) {

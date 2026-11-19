@@ -10,6 +10,9 @@ dependencies {
     // ModMenu 的配置入口点接口（§7A.2）：只在编译期需要，运行时由 pvz-modmenu 模组自己提供；
     // 未安装 pvz-modmenu 时入口点没有任何读取方，声明无副作用
     compileOnly(files("../pvz-modmenu/build/libs/modmenu-1.0.0.jar"))
+    // MixinExtras 注解（@ModifyExpressionValue）：Fabric Loader 0.15+ 内置运行时
+    // （loader jar 的 META-INF/jars 里同名 jar），编译期用从中取出的同一份
+    compileOnly(files("libs/mixinextras-fabric-0.5.5.jar"))
 }
 
 group = "cn.enaium.fabricpvz"
