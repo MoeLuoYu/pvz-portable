@@ -12,6 +12,7 @@ import cn.enaium.fabricpvz.portable.lawn.GridItemType;
 import cn.enaium.fabricpvz.portable.lawn.RenderLayer;
 import cn.enaium.fabricpvz.portable.lawn.GridItemState;
 import cn.enaium.fabricpvz.portable.lawn.LawnCommon;
+import cn.enaium.fabricpvz.portable.sexy.Common;
 import cn.enaium.fabricpvz.portable.lawn.LawnEditWidget;
 import cn.enaium.fabricpvz.portable.lawn.LawnMower;
 import cn.enaium.fabricpvz.portable.lawn.LawnMowerState;
@@ -1229,32 +1230,212 @@ public final class TrainerMod implements ModInitializer {
     // 花园页
     // -------------------------------------------------------------------------------------
 
-    /** 新增一株盆栽（花园调试键 m/+ 的同款路径）：花园满员则不添加；朝向随机。 */
+    /**
+     * 向当前花园添加一株盆栽（用后即焚）：每次添加前先把会话内存重置为存档状态、
+     * 矫正历史污染，然后在当前场景的合法格位里找空位写入新记录；存档后再从文件
+     * 重读（全新对象图）并重放当前花园。记录层是唯一真源，Board 层永远是它的投影。
+     */
     private static void addPottedPlant(boolean theMarigold, boolean theFullGrown) {
-        if (sApp.mZenGarden == null || sBoard == null) {
+        if (sApp.mZenGarden == null || sBoard == null || sApp.mZenGarden.mBoard == null) {
+            // mBoard == null：智慧树等非花园场景（树园无花园 Board）
             show(sBoard, "请在花园里使用");
             return;
         }
-        if (sApp.mZenGarden.isZenGardenFull(true)) {
+        var aGarden = sApp.mZenGarden;
+        int aGardenType = aGarden.mGardenType;
+        // 状态基线：先存档（固化会话内原生未存档的操作——手推车放置等内存执行
+        // 的变更）再从文件重读（全新对象图）——避免直接 loadDetails 造成回档
+        sApp.mPlayerInfo.saveDetails();
+        sApp.mPlayerInfo.loadDetails();
+        // 历史污染自愈：同格去重 + 非法格位归位（纯记录层；干净存档为空操作）
+        rebuildGardenPlants(aGardenType);
+        boolean aAquarium = aGardenType == cn.enaium.fabricpvz.portable.lawn.GardenType.GARDEN_AQUARIUM;
+        // 水族馆禁止金盏花与幼苗（只能添加随机大花，且随机出水生植物）
+        if (aAquarium && (theMarigold || !theFullGrown)) {
+            show(sBoard, "水族馆只能添加随机大花");
+            return;
+        }
+        // 容量与找位（纯记录层：当前场景合法格位 - 记录占用）
+        if (countPlantsInGarden(aGardenType) >= gardenCapacity(aGardenType)) {
             show(sBoard, "当前花园已满");
             return;
         }
-        PottedPlant aPottedPlant = new PottedPlant();
+        int aSeedType;
         if (theMarigold) {
-            aPottedPlant.initializePottedPlant(cn.enaium.fabricpvz.portable.lawn.SeedType.SEED_MARIGOLD);
+            aSeedType = cn.enaium.fabricpvz.portable.lawn.SeedType.SEED_MARIGOLD;
+        } else {
+            boolean aMushroom = aGardenType == cn.enaium.fabricpvz.portable.lawn.GardenType.GARDEN_MUSHROOM;
+            // 随机树种按场景锁：温室只出不睡觉的（蘑菇在温室常年嗜睡无意义），
+            // 蘑菇园只出会睡觉的（蘑菇类），水族馆只出水生植物
+            do {
+                aSeedType = ZenGarden.pickRandomSeedType();
+            } while (aAquarium != cn.enaium.fabricpvz.portable.lawn.Plant.isAquatic(aSeedType)
+                    || (aMushroom != cn.enaium.fabricpvz.portable.lawn.Plant.isNocturnal(aSeedType)));
+        }
+        int[] aSpot = findOpenSpotInGarden(aGardenType);
+        if (aSpot[0] == -1) {
+            show(sBoard, "当前花园已满");
+            return;
+        }
+        int aIndex = sApp.mPlayerInfo.mNumPottedPlants;
+        PottedPlant aPottedPlant = sApp.mPlayerInfo.mPottedPlant[aIndex];
+        aPottedPlant.initializePottedPlant(aSeedType);
+        if (theMarigold) {
             // 金盏花随机颜色（白/橙/红/浅绿四色变体）
             aPottedPlant.mDrawVariation = cn.enaium.fabricpvz.portable.pvzp.PvzpCommon.randRangeInt(
                     DrawVariation.VARIATION_MARIGOLD_WHITE,
                     DrawVariation.VARIATION_MARIGOLD_LIGHT_GREEN);
-        } else {
-            aPottedPlant.initializePottedPlant(ZenGarden.pickRandomSeedType());
-            if (theFullGrown) {
-                aPottedPlant.mPlantAge = PottedPlantAge.PLANTAGE_FULL;
+        } else if (theFullGrown) {
+            aPottedPlant.mPlantAge = PottedPlantAge.PLANTAGE_FULL;
+        }
+        aPottedPlant.mWhichZenGarden = aGardenType;
+        aPottedPlant.mX = aSpot[0];
+        aPottedPlant.mY = aSpot[1];
+        sApp.mPlayerInfo.mNumPottedPlants++;
+        // 存档后从文件重读（全新对象图），随后按重读结果重放当前花园
+        sApp.mPlayerInfo.saveDetails();
+        sApp.mPlayerInfo.loadDetails();
+        sBoard.mPlants.dataArrayFreeAll();
+        for (int i = 0; i < sApp.mPlayerInfo.mNumPottedPlants; i++) {
+            PottedPlant aRecord = sApp.mPlayerInfo.mPottedPlant[i];
+            if (aRecord.mWhichZenGarden == aGardenType) {
+                sApp.mZenGarden.placePottedPlant(i);
             }
         }
-        sApp.mZenGarden.addPottedPlant(aPottedPlant);
+        if (sApp.getDialog(cn.enaium.fabricpvz.portable.lawn.Dialogs.DIALOG_STORE) == null) {
+            sBoard.doPlantingEffects(aPottedPlant.mX, aPottedPlant.mY,
+                    sBoard.getTopPlantAt(aPottedPlant.mX, aPottedPlant.mY,
+                            cn.enaium.fabricpvz.portable.lawn.PlantPriority.TOPPLANT_ANY));
+        }
         show(sBoard, theMarigold ? "已添加一株金盏花幼苗"
-                : theFullGrown ? "已添加一株状态良好的大花" : "已添加一株随机幼苗");
+                : theFullGrown ? "已添加一株随机大花" : "已添加一株随机幼苗");
+    }
+
+    /**
+     * 历史污染自愈（纯记录层）：同一花园内 (mX,mY) 重复的记录只保留第一条、
+     * 其余原地移除（数组紧凑化）；蘑菇园/水族馆早前按温室 8x4 误配的记录
+     * （mY=1..3，不在特殊布点表内）归位到当前场景的合法空位。干净存档为空操作。
+     */
+    private static void rebuildGardenPlants(int theGardenType) {
+        boolean aMainGarden = theGardenType == cn.enaium.fabricpvz.portable.lawn.GardenType.GARDEN_MAIN;
+        // 同格去重：同一花园内 (mX,mY) 重复的记录只保留第一条
+        int aWrite = 0;
+        for (int aRead = 0; aRead < sApp.mPlayerInfo.mNumPottedPlants; aRead++) {
+            PottedPlant aRecord = sApp.mPlayerInfo.mPottedPlant[aRead];
+            boolean aDuplicate = false;
+            for (int i = 0; i < aWrite; i++) {
+                PottedPlant aKept = sApp.mPlayerInfo.mPottedPlant[i];
+                if (aKept.mWhichZenGarden == aRecord.mWhichZenGarden
+                        && aKept.mX == aRecord.mX && aKept.mY == aRecord.mY) {
+                    aDuplicate = true;
+                    break;
+                }
+            }
+            if (!aDuplicate) {
+                if (aWrite != aRead) {
+                    PottedPlant aSlot = sApp.mPlayerInfo.mPottedPlant[aWrite];
+                    copyPottedPlantValues(aSlot, aRecord);
+                }
+                aWrite++;
+            }
+        }
+        sApp.mPlayerInfo.mNumPottedPlants = aWrite;
+        // 非法格位归位：蘑菇园/水族馆合法布点是 y=0 行的 x=0..7，温室是 8x4
+        for (int i = 0; i < sApp.mPlayerInfo.mNumPottedPlants; i++) {
+            PottedPlant aRecord = sApp.mPlayerInfo.mPottedPlant[i];
+            if (aRecord.mWhichZenGarden != theGardenType) {
+                continue;
+            }
+            boolean aLegal = aMainGarden
+                    ? aRecord.mX >= 0 && aRecord.mX < cn.enaium.fabricpvz.portable.lawn.ZenGarden.ZEN_MAX_GRIDSIZE_X
+                            && aRecord.mY >= 0 && aRecord.mY < cn.enaium.fabricpvz.portable.lawn.ZenGarden.ZEN_MAX_GRIDSIZE_Y
+                    : aRecord.mY == 0 && aRecord.mX >= 0 && aRecord.mX < 8;
+            if (aLegal) {
+                continue;
+            }
+            int[] aSpot = findOpenSpotInGarden(theGardenType);
+            if (aSpot[0] == -1) {
+                break; // 无合法空位（不应发生：容量计数随后会拦）
+            }
+            aRecord.mX = aSpot[0];
+            aRecord.mY = aSpot[1];
+        }
+    }
+
+    /** PottedPlant 记录的逐字段复制（与 ZenGarden.copyPottedPlant 同表，本地副本）。 */
+    private static void copyPottedPlantValues(
+            cn.enaium.fabricpvz.portable.lawn.system.PottedPlant theDest,
+            cn.enaium.fabricpvz.portable.lawn.system.PottedPlant theSource) {
+        theDest.mSeedType = theSource.mSeedType;
+        theDest.mWhichZenGarden = theSource.mWhichZenGarden;
+        theDest.mX = theSource.mX;
+        theDest.mY = theSource.mY;
+        theDest.mFacing = theSource.mFacing;
+        theDest.mLastWateredTime = theSource.mLastWateredTime;
+        theDest.mDrawVariation = theSource.mDrawVariation;
+        theDest.mPlantAge = theSource.mPlantAge;
+        theDest.mTimesFed = theSource.mTimesFed;
+        theDest.mFeedingsPerGrow = theSource.mFeedingsPerGrow;
+        theDest.mPlantNeed = theSource.mPlantNeed;
+        theDest.mLastNeedFulfilledTime = theSource.mLastNeedFulfilledTime;
+        theDest.mLastFertilizedTime = theSource.mLastFertilizedTime;
+        theDest.mLastChocolateTime = theSource.mLastChocolateTime;
+    }
+
+    /** 统计指定花园（mWhichZenGarden）已占用的格位数。 */
+    private static int countPlantsInGarden(int theGardenType) {
+        int aUsed = 0;
+        for (int i = 0; i < sApp.mPlayerInfo.mNumPottedPlants; i++) {
+            if (sApp.mPlayerInfo.mPottedPlant[i].mWhichZenGarden == theGardenType) {
+                aUsed++;
+            }
+        }
+        return aUsed;
+    }
+
+    /**
+     * 当前花园的容量：温室为 8x4 网格（32）；蘑菇园/水族馆走特殊布点表
+     * （gMushroomGridPlacement / gAquariumGridPlacement），各只有 8 个合法点位
+     * （全部 gridY=0，靠 gridX 0..7 经 gridToPixel 查表映射到屏幕散布位置）——
+     * 按 8x4 找位会落到查表不存在的格（gridToPixel 返回 -1，画到画面左上角、
+     * 无法交互也不占用合法格，造成无限添加）。
+     */
+    private static int gardenCapacity(int theGardenType) {
+        return theGardenType == cn.enaium.fabricpvz.portable.lawn.GardenType.GARDEN_MAIN
+                ? cn.enaium.fabricpvz.portable.lawn.ZenGarden.ZEN_MAX_GRIDSIZE_X
+                        * cn.enaium.fabricpvz.portable.lawn.ZenGarden.ZEN_MAX_GRIDSIZE_Y
+                : 8;
+    }
+
+    /**
+     * 在当前花园找一个空位：温室按 8x4 网格（跳过 Crazy Dave 台词遮住的左上区域）；
+     * 蘑菇园/水族馆只在 y=0 行的 8 个特殊布点格里找未占用者。
+     */
+    private static int[] findOpenSpotInGarden(int theGardenType) {
+        boolean aMainGarden = theGardenType == cn.enaium.fabricpvz.portable.lawn.GardenType.GARDEN_MAIN;
+        int aMaxX = aMainGarden
+                ? cn.enaium.fabricpvz.portable.lawn.ZenGarden.ZEN_MAX_GRIDSIZE_X : 8;
+        int aMaxY = aMainGarden
+                ? cn.enaium.fabricpvz.portable.lawn.ZenGarden.ZEN_MAX_GRIDSIZE_Y : 1;
+        for (int x = 0; x < aMaxX; x++) {
+            for (int y = 0; y < aMaxY; y++) {
+                // 占用按记录层（loadDetails 后记录=存档真源）：同一花园内同格
+                // 已有记录即视为占用
+                boolean aOccupied = false;
+                for (int i = 0; i < sApp.mPlayerInfo.mNumPottedPlants; i++) {
+                    PottedPlant aPottedPlant = sApp.mPlayerInfo.mPottedPlant[i];
+                    if (aPottedPlant.mWhichZenGarden == theGardenType
+                            && aPottedPlant.mX == x && aPottedPlant.mY == y) {
+                        aOccupied = true;
+                        break;
+                    }
+                }
+                if (!aOccupied) {
+                    return new int[]{x, y};
+                }
+            }
+        }
+        return new int[]{-1, -1};
     }
 
     /**
