@@ -3,7 +3,8 @@
   "id": "pvz-trainer-mod",
   "version": "1.0.0",
   "name": "PvZ Trainer Mod",
-  "description": "修改器模组：常驻可拖动的原生悬浮按钮，点击展开标签页对话框（无限阳光/免费种植/自动收集/暂停出怪与出怪推进、一键清场等）。主菜单 X+C 或 ModMenu 配置入口打开设置。",
+  "icon": "assets/pvz-trainer-mod/icon.png",
+  "description": "全能的PVZ修改器，使用FabricAPI+Mixin实现",
   "authors": [
     "MoeLuoYu"
   ],
